@@ -21,15 +21,22 @@ class GameOfLifeHaltingConfig:
 
     def validate(self):
         """Validate configuration parameters"""
-        assert 3 <= self.grid_size_x <= 999, "grid_size_x must be between 0 and 999"
-        assert 3 <= self.grid_size_y <= 999, "grid_size_y must be between 0 and 999"
-        assert self.simulation_steps >= 0, "simulation_steps must be gte 0"
+        if self.max_difficulty == 1:
+            assert self.grid_size_x >= 7, "grid_size_x must be gte 7 (difficulty 1)"
+            assert self.grid_size_y >= 7, "grid_size_y must be gte 7 (difficulty 1)"
+        if self.max_difficulty == 2:
+            assert self.grid_size_x >= 13, "grid_size_x must be gte 13 (difficulty 2)"
+            assert self.grid_size_y >= 13, "grid_size_y must be gte 13 (difficulty 2)"
+        if self.max_difficulty == 3:
+            assert self.grid_size_x >= 25, "grid_size_x must be gte 25 (difficulty 3)"
+            assert self.grid_size_y >= 25, "grid_size_y must be gte 25 (difficulty 3)"
 
 class GameOfLifeHaltingDataset(ProceduralDataset):
     """Generates Game of Life games with configurable parameters"""
 
     # via this great wiki https://conwaylife.com/wiki/oscillator
     OSCILLATORS = [
+        # Easy
         {
             "name": "blinker",
             "size_x": 3,
@@ -41,15 +48,139 @@ class GameOfLifeHaltingDataset(ProceduralDataset):
                 [1, 1, 1],
                 [0, 0, 0],
             ]
-        }
+        },
+        {
+            "name": "toad",
+            "size_x": 4,
+            "size_y": 4,
+            "period": 2,
+            'difficulty': 1,
+            'cells': [
+                [0, 1, 1, 0],
+                [1, 0, 0, 0],
+                [0, 0, 0, 1],
+                [0, 1, 1, 0], 
+            ]
+        },
+        {
+            "name": "clock",
+            "size_x": 4,
+            "size_y": 4,
+            "period": 2,
+            'difficulty': 1,
+            'cells': [
+                [0, 0, 1, 0],
+                [1, 0, 1, 0],
+                [0, 1, 0, 1],
+                [0, 1, 0, 0], 
+            ]
+        },
+        {
+            "name": "bipole",
+            "size_x": 5,
+            "size_y": 5,
+            "period": 2,
+            'difficulty': 1,
+            'cells': [
+                [0, 0, 0, 1, 1],
+                [0, 0, 1, 0, 1],
+                [0, 0, 0, 0, 0],
+                [1, 0, 1, 0, 0],
+                [1, 1, 0, 0, 0],
+            ]
+        },
+        {
+            "name": "tripole",
+            "size_x": 6,
+            "size_y": 6,
+            "period": 2,
+            'difficulty': 1,
+            'cells': [
+                [0, 0, 0, 0, 1, 1],
+                [0, 0, 0, 1, 0, 1],
+                [0, 0, 0, 0, 0, 0],
+                [0, 1, 0, 1, 0, 0],
+                [1, 0, 0, 0, 0, 0],
+                [1, 1, 0, 0, 0, 0],
+            ]
+        },
+
+        # Medium
+        {
+            "name": "caterer",
+            "size_x": 6,
+            "size_y": 9,
+            "period": 3,
+            'difficulty': 2,
+            'cells': [
+                [0, 1, 1, 1, 0, 0],
+                [0, 0, 0, 0, 0, 1],
+                [1, 0, 0, 0, 0, 1],
+                [0, 0, 0, 0, 1, 0],
+                [0, 1, 1, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0],
+            ]
+        },
+        {
+            "name": "mold",
+            "size_x": 6,
+            "size_y": 6,
+            "period": 4,
+            'difficulty': 2,
+            'cells': [
+                [0, 0, 0, 1, 1, 0],
+                [0, 0, 1, 0, 0, 1],
+                [1, 0, 0, 1, 0, 1],
+                [0, 0, 0, 0, 1, 0],
+                [1, 0, 1, 1, 0, 0],
+                [0, 1, 0, 0, 0, 0],
+            ]
+        },
+        {
+            "name": "pinwheel",
+            "size_x": 12,
+            "size_y": 12,
+            "period": 4,
+            'difficulty': 2,
+            'cells': [
+                [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0],
+                [1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0],
+                [1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1],
+                [0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1],
+                [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+            ]
+        },
+
+        # Hard
+        {
+            "name": "pentadecathlon",
+            "size_x": 16,
+            "size_y": 9,
+            "period": 15,
+            'difficulty': 3,
+            'cells': [
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0],
+                [1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1],
+                [0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            ]
+        },
     ]
-
-    def __init__(self, config: GameOfLifeHaltingConfig):
-        self._prompt_templates = [
-            "What will this Game of Life board look like after {simulation_steps} steps of simulation?\n\n{board}"
-        ]
-
-        super().__init__(config=config, seed=config.seed, size=config.size)
 
     def __getitem__(self, idx: int) -> dict:
         """Generate a single GameOfLife task
@@ -60,31 +191,105 @@ class GameOfLifeHaltingDataset(ProceduralDataset):
                 - answer: str, a solution string
                 - metadata: dict with generation parameters
         """
+        # Create a reproducible random generator for this index.
         rng = Random(self.seed + idx)
 
-        # Make the board
-        board = cpl.init_simple2d(self.config.grid_size_x, self.config.grid_size_y)
-        # Reset the board to all 0s. [timestep, x, y] format
-        board[:, :, :] = 0
+        # Get dimensions for convenience.
+        grid_x = self.config.grid_size_x
+        grid_y = self.config.grid_size_y
 
-        # Choose some oscillators at or below this difficulty
+        # Initialize the board.
+        # Note: cpl.init_simple2d returns an array with shape 
+        # (timesteps, grid_size_x, grid_size_y)
+        board = cpl.init_simple2d(grid_x, grid_y)
+        board[:, :, :] = 0  # reset all cells to dead
 
-        # Add the oscillators with a 1-cell buffer to a random location where they fit and don't overlap any buffer
+        # We will place oscillators on the initial board (timestep 0).
+        initial_board = board[0]
 
-        # Evolve the solution
+        # Create an occupancy grid to keep track of which cells (and their 1-cell buffer)
+        # are already occupied by an oscillator.
+        occupancy = [[False for _ in range(grid_y)] for _ in range(grid_x)]
+
+        # Filter oscillators that do not exceed the allowed difficulty.
+        valid_oscillators = [
+            osc for osc in self.OSCILLATORS if osc["difficulty"] <= self.config.max_difficulty
+        ]
+
+        placed_oscillators: List[Dict] = []
+
+        # Place the requested number of oscillators.
+        for _ in range(self.config.oscillators):
+            osc = rng.choice(valid_oscillators)
+            height = osc["size_y"]
+            width = osc["size_x"]
+
+            # We need to ensure that the oscillator (plus a 1-cell border on all sides)
+            # fits within the grid. Therefore, valid top-left positions (i,j) must satisfy:
+            # 1 <= i <= grid_x - height - 1 and 1 <= j <= grid_y - width - 1.
+            attempts = 1000
+            placed = False
+            while attempts > 0 and not placed:
+                i = rng.randint(1, grid_x - height - 1)
+                j = rng.randint(1, grid_y - width - 1)
+
+                # Check if the region from (i-1, j-1) to (i+height, j+width) is free.
+                valid = True
+                for x in range(i - 1, i + height + 1):
+                    for y in range(j - 1, j + width + 1):
+                        if occupancy[x][y]:
+                            valid = False
+                            break
+                    if not valid:
+                        break
+
+                if valid:
+                    # Mark the region (including the 1-cell border) as occupied.
+                    for x in range(i - 1, i + height + 1):
+                        for y in range(j - 1, j + width + 1):
+                            occupancy[x][y] = True
+
+                    # Place the oscillator pattern on the initial board.
+                    for dx in range(height):
+                        for dy in range(width):
+                            initial_board[i + dx, j + dy] = osc["cells"][dx][dy]
+
+                    placed = True
+                    placed_oscillators.append({
+                        "name": osc["name"],
+                        "position": (i, j)
+                    })
+
+                attempts -= 1
+            # If no valid placement is found after many attempts, we skip this oscillator.
+
+        # Evolve the Game of Life using the initial board state.
         evolved = cpl.evolve2d(
-            board, timesteps=self.config.max_simulation_steps + 1, apply_rule=cpl.game_of_life_rule, memoize="recursive"
+            board,
+            timesteps=self.config.max_simulation_steps + 1,
+            apply_rule=cpl.game_of_life_rule,
+            memoize="recursive"
         )
 
-        board_str = str(board[0])
+        # Convert the initial and final board states to strings.
+        board_str = str(initial_board)
         result_str = str(evolved[-1])
 
+        # Create the question string.
+        question = (
+            f"This is a 'Game of Life' grid. We consider a game halted if there are no cells alive.\n"
+            f"Will this game halt at or before {self.config.max_simulation_steps} steps?\n\n"
+            f"Initial board:\n{board_str}"
+        )
+
         return {
-            "question":f "This is a 'Game of Life' grid. We consider a game halted if there are no cells alive. Will this game halt at or before {max_simulation_steps} steps?",
+            "question": question,
             "answer": result_str,
             "metadata": {
-                "grid_size_x": self.config.grid_size_x,
-                "grid_size_y": self.config.grid_size_y,
+                "grid_size_x": grid_x,
+                "grid_size_y": grid_y,
+                "placed_oscillators": placed_oscillators,
+                "simulation_steps": self.config.max_simulation_steps
             },
         }
 
