@@ -8,13 +8,14 @@ from ..factory import ProceduralDataset, register_dataset
 
 
 @dataclass
-class GameOfLifeConfig:
-    """Configuration for Game of Life puzzle generation"""
+class GameOfLifeHaltingConfig:
+    """Configuration for Game of Life halting problems generation"""
 
-    grid_size_x: int = 20
-    grid_size_y: int = 20
-    filled_cells: int = 100  # actually a max
-    simulation_steps: int = 1
+    grid_size_x: int = 24
+    grid_size_y: int = 24
+    max_difficulty: int = 1
+    oscillators: int = 1
+    max_simulation_steps: int = 1
     seed: Optional[int] = None
     size: int = 500
 
@@ -23,13 +24,27 @@ class GameOfLifeConfig:
         assert 3 <= self.grid_size_x <= 999, "grid_size_x must be between 0 and 999"
         assert 3 <= self.grid_size_y <= 999, "grid_size_y must be between 0 and 999"
         assert self.simulation_steps >= 0, "simulation_steps must be gte 0"
-        assert self.filled_cells <= self.grid_size_x * self.grid_size_y, "filled_cells must fit in x times y"
 
-
-class GameOfLifeDataset(ProceduralDataset):
+class GameOfLifeHaltingDataset(ProceduralDataset):
     """Generates Game of Life games with configurable parameters"""
 
-    def __init__(self, config: GameOfLifeConfig):
+    # via this great wiki https://conwaylife.com/wiki/oscillator
+    OSCILLATORS = [
+        {
+            "name": "blinker",
+            "size_x": 3,
+            "size_y": 3,
+            "period": 2,
+            'difficulty': 1,
+            'cells': [
+                [0, 0, 0],
+                [1, 1, 1],
+                [0, 0, 0],
+            ]
+        }
+    ]
+
+    def __init__(self, config: GameOfLifeHaltingConfig):
         self._prompt_templates = [
             "What will this Game of Life board look like after {simulation_steps} steps of simulation?\n\n{board}"
         ]
@@ -49,32 +64,27 @@ class GameOfLifeDataset(ProceduralDataset):
 
         # Make the board
         board = cpl.init_simple2d(self.config.grid_size_x, self.config.grid_size_y)
+        # Reset the board to all 0s. [timestep, x, y] format
         board[:, :, :] = 0
 
-        # Add the cells
-        for i in range(0, self.config.filled_cells):
-            rx = rng.randint(0, self.config.grid_size_x - 1)
-            ry = rng.randint(0, self.config.grid_size_y - 1)
-            board[:, rx, ry] = 1
+        # Choose some oscillators at or below this difficulty
 
-        # Simulate the result to get the answer
+        # Add the oscillators with a 1-cell buffer to a random location where they fit and don't overlap any buffer
+
+        # Evolve the solution
         evolved = cpl.evolve2d(
-            board, timesteps=self.config.simulation_steps + 1, apply_rule=cpl.game_of_life_rule, memoize="recursive"
+            board, timesteps=self.config.max_simulation_steps + 1, apply_rule=cpl.game_of_life_rule, memoize="recursive"
         )
 
         board_str = str(board[0])
         result_str = str(evolved[-1])
 
         return {
-            "question": rng.choice(self._prompt_templates).format(
-                simulation_steps=self.config.simulation_steps, board=board_str
-            ),
+            "question":f "This is a 'Game of Life' grid. We consider a game halted if there are no cells alive. Will this game halt at or before {max_simulation_steps} steps?",
             "answer": result_str,
             "metadata": {
                 "grid_size_x": self.config.grid_size_x,
                 "grid_size_y": self.config.grid_size_y,
-                "filled_cells": self.config.filled_cells,
-                "simulation_steps": self.config.simulation_steps,
             },
         }
 
@@ -99,4 +109,4 @@ class GameOfLifeDataset(ProceduralDataset):
             return 1.0  # Yay
 
 
-register_dataset("game_of_life", GameOfLifeDataset, GameOfLifeConfig)
+register_dataset("game_of_life_halting", GameOfLifeHaltingDataset, GameOfLifeHaltingConfig)
