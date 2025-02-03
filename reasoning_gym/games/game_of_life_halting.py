@@ -11,10 +11,10 @@ from ..factory import ProceduralDataset, register_dataset
 class GameOfLifeHaltingConfig:
     """Configuration for Game of Life halting problems generation"""
 
-    grid_size_x: int = 24
-    grid_size_y: int = 24
+    grid_size_x: int = 25
+    grid_size_y: int = 25
     max_difficulty: int = 1
-    oscillators: int = 1
+    oscillators: int = 4
     max_simulation_steps: int = 1
     seed: Optional[int] = None
     size: int = 500
