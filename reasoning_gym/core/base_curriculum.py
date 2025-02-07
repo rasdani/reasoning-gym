@@ -2,53 +2,10 @@
 Base class for exercise curricula that defines the interface and common functionality.
 """
 
-from typing import Dict, List, Any
-from dataclasses import dataclass
+from typing import Dict, List, Any, Callable
 from reasoning_gym.core.attributes import AttributeDefinition, AttributeType
+from reasoning_gym.core.template import Template
 import random
-
-@dataclass
-class Placeholder:
-    """Represents a placeholder in an expression template"""
-    name: str
-    generator: str  # Name of generator function to use
-    args: Dict[str, Any] = None
-
-    def eval(self, exercise: Any, rng: random.Random) -> Dict[str, Any]:
-        """Evaluate the placeholder using current curriculum settings"""
-        if not hasattr(exercise, self.generator):
-            raise ValueError(f"Unknown generator: {self.generator}")
-        
-        generator = getattr(exercise, self.generator)
-        args = self.args or {}
-        return generator(rng, **args)
-
-@dataclass
-class Template:
-    """Defines a template for generating questions and answers"""
-    question: str
-    placeholders: Dict[str, Placeholder]
-    metadata: Dict[str, Any]
-
-    def eval(self, exercise: Any, rng: random.Random) -> Dict[str, Any]:
-        """Evaluate all placeholders in the template"""
-        values = {}
-        metadata = {}
-
-        for name, placeholder in self.placeholders.items():
-            result = placeholder.eval(exercise, rng)
-            values[name] = result.get("text", str(result.get("value", "")))
-            metadata[name] = result.get("metadata", {})
-
-        return {
-            "question": self.question.format(**values),
-            "answer": str(next((r.get("value") for r in metadata.values() if "value" in r), "")),
-            "metadata": {
-                **metadata,
-                "template": self.question,
-                **self.metadata
-            }
-        }
 
 class BaseCurriculum:
     """Base class for all exercise curricula"""

@@ -2,7 +2,7 @@ import logging
 from typing import Dict, Any, Tuple
 from reasoning_gym import exercises, curricula
 
-logger = logging.getLogger(__name__) # TODO: Why only here
+logger = logging.getLogger(__name__)
 
 class ExerciseRegistrar:
     """Handles registration of exercises and curricula."""

@@ -1,165 +1,103 @@
 from dataclasses import dataclass
-from typing import Dict, Any, List
-import random
-from reasoning_gym.core.base_curriculum import BaseCurriculum, Template, Placeholder
+from typing import Dict, Any
+import operator
+import numpy as np
+from reasoning_gym.core.base_curriculum import BaseCurriculum
 
 @dataclass
-class SymbolicExpression:
-    """Represents a symbolic mathematical expression with lazy evaluation"""
-    template: str
-    placeholders: Dict[str, 'SymbolicTerm']
-    metadata: Dict[str, Any]
-
-@dataclass
-class SymbolicTerm:
-    """Represents a symbolic term that can be evaluated at runtime"""
-    sign_gen: Any      # Generator from sign attribute
-    notation_gen: Any  # Generator from notation attribute
-    base_gen: Any      # Generator from base attribute
-    num_gen: Any       # Composite generator for number (uses digits/decimals)
-
-    def evaluate(self, rng: random.Random) -> Dict[str, Any]:
-        sign = self.sign_gen()
-        notation = self.notation_gen()
-        base = self.base_gen()
-        number = self.num_gen()
-
-        # Format based on notation and base
-        match notation:
-            case "regular":
-                text = str(number)
-            case "scientific":
-                text = f"{number:.2e}"
-            case "base":
-                match base:
-                    case 2:
-                        text = f"0b{bin(number)[2:]}"
-                    case 16:
-                        text = f"0x{hex(number)[2:].upper()}"
-                    case _:
-                        text = str(number)
-
-        return {
-            "text": f"{sign}{text}",
-            "value": number if sign != '-' else -number,
-            "metadata": {
-                "notation": notation,
-                "base": base,
-                "raw_value": number,
-                "sign": sign
-            }
-        }
-
 class ChainSumDataset:
+    """Dataset generator for chain arithmetic problems."""
     def __init__(self):
-        self.rng = random.Random()
+        # Define operator mappings
+        self.pedmas = {
+            '**': (operator.pow, 3),    # (function, precedence)
+            '*': (operator.mul, 2),
+            '/': (operator.truediv, 2),
+            '+': (operator.add, 1),
+            '-': (operator.sub, 1)
+        }
+        self.curriculum = None
 
-    def generate_expression(self, curriculum: BaseCurriculum) -> Dict[str, Any]:
-        """Generates a symbolic expression based on current curriculum levels"""
-        # Get generators for each attribute
-        num_terms = curriculum.get_attr_value("max_terms")
-        operators = curriculum.get_attr_value("operators")
+    def generate(self, curriculum: BaseCurriculum) -> Dict[str, Any]:
+        """Generate a problem using the curriculum's template system"""
+        self.curriculum = curriculum
+        max_attempts = 10
 
-        # Create symbolic terms
-        terms: List[SymbolicTerm] = []
-        for i in range(num_terms):
-            term = SymbolicTerm(
-                sign_gen=curriculum.attributes["sign"].get_generator(
-                    curriculum.get_attr_level("sign"), self.rng),
-                notation_gen=curriculum.attributes["notation"].get_generator(
-                    curriculum.get_attr_level("notation"), self.rng),
-                base_gen=curriculum.attributes["base"].get_generator(
-                    curriculum.get_attr_level("base"), self.rng),
-                num_gen=self._create_number_generator(curriculum)
-            )
-            terms.append(term)
+        for _ in range(max_attempts):
+            try:
+                template = curriculum.get_template(curriculum.rng)
+                return template.eval(self, curriculum.rng)
+            except ValueError as e:
+                if "Invalid operation" in str(e):
+                    continue
+                raise
 
-        # Create symbolic expression template
-        placeholders = {}
-        template_parts = []
-
-        for i in range(num_terms):
-            # Add term
-            term_key = f"term_{i}"
-            template_parts.append(f"{{{term_key}}}")
-            placeholders[term_key] = terms[i]
-
-            # Add operator if not last term
-            if i < num_terms - 1:
-                op_key = f"op_{i}"
-                template_parts.append(f"{{{op_key}}}")
-                placeholders[op_key] = lambda: self.rng.choice(operators)
-
-        return SymbolicExpression(
-            template=" ".join(template_parts),
-            placeholders=placeholders,
-            metadata={
-                "num_terms": num_terms,
-                "available_operators": operators
-            }
-        )
-
-    def _create_number_generator(self, curriculum: BaseCurriculum):
-        """Creates a composite generator for numbers based on digits and decimals"""
-        digits_gen = curriculum.attributes["num_digits"].get_generator(
-            curriculum.get_attr_level("num_digits"), self.rng)
-        decimals_gen = curriculum.attributes["num_decimals"].get_generator(
-            curriculum.get_attr_level("num_decimals"), self.rng)
-
-        def generate_number():
-            max_digits = digits_gen()
-            decimals = decimals_gen()
-
-            # Generate integer part
-            number = self.rng.randint(10 ** (max_digits-1), 10 ** max_digits - 1)
-
-            # Add decimal places if needed
-            if decimals > 0:
-                decimal_part = self.rng.randint(0, 10 ** decimals - 1)
-                return number + (decimal_part / (10 ** decimals))
-            return number
-
-        return generate_number
-
-    def generate(self) -> Dict[str, Any]:
-        """Main generation entry point"""
-        symbolic = self.generate_expression(self.curriculum)
-
-        # Evaluate all placeholders
-        evaluated_placeholders = {}
-        raw_values = []
+    def _parse_expression(self, executed_parts: Dict[str, str]) -> tuple[list, list]:
+        """Extract values and operators from executed parts"""
+        values = []
         operators = []
 
-        for key, placeholder in symbolic.placeholders.items():
-            if key.startswith('term_'):
-                result = placeholder.evaluate(self.rng)
-                evaluated_placeholders[key] = result["text"]
-                raw_values.append(result["value"])
-            else:  # operator
-                op = placeholder()
-                evaluated_placeholders[key] = op
-                operators.append(op)
+        i = 0
+        while f"term_{i}" in executed_parts:
+            val = executed_parts[f"term_{i}"].lstrip('+')
+            try:
+                num = val.lstrip('-')
+                if num.startswith(('0b', '0x')):
+                    sign = -1 if val.startswith('-') else 1
+                    base = 2 if num.startswith('0b') else 16 if num.startswith('0x') else 10
+                    values.append(sign * float(int(num[2:], base)))
+                else:
+                    values.append(float(val))
+            except ValueError:
+                values.append(val)
+            i += 1
 
-        # Format final expression
-        expression = symbolic.template.format(**evaluated_placeholders)
+        # Extract operators
+        for i in range(len(values) - 1):
+            if f"op_{i}" in executed_parts:
+                operators.append(executed_parts[f"op_{i}"])
 
-        # Calculate final answer
-        answer = raw_values[0]
-        for i, op in enumerate(operators):
-            match op:
-                case '+': answer += raw_values[i+1]
-                case '-': answer -= raw_values[i+1]
-                case '*': answer *= raw_values[i+1]
-                case '/': answer /= raw_values[i+1]
-                case '**': answer **= raw_values[i+1]
+        return values, operators
 
-        return {
-            "question": f"Calculate the following: {expression}",
-            "answer": str(answer),
-            "metadata": {
-                "raw_values": raw_values,
-                "operators": operators,
-                "expression": expression,
-                **symbolic.metadata
-            }
-        }
+    def _evaluate_expression(self, values: list, operators: list) -> float:
+        """Evaluate expression respecting operator precedence"""
+        if not operators:
+            return values[0] if values else 0
+
+        vals, ops = list(values), list(operators)
+
+        def handle_edge(op, a, b):
+            # Handle division first
+            if op == '/':
+                if np.isclose(b, 0):
+                    raise ValueError("chain_sum.py: Invalid operation, division by zero")
+            # Handle exponentiation edge cases
+            if op == '**':
+                if np.isclose(a, 0) and b < 0:
+                    raise ValueError("chain_sum.py: Invalid operation, zero with negative exponent")
+                if a < 0 and not isinstance(b, int) and not b.is_integer():
+                    raise ValueError("chain_sum.py: Invalid operation, fractional exponent of negative base")
+
+            # Handle potential overflows
+            try:
+                result = self.pedmas[op][0](a, b)
+                if abs(result) > np.finfo(float).max:
+                    raise OverflowError
+                return result
+            except OverflowError:
+                raise ValueError("chain_sum.py: Invalid operation, overflow in calculation")
+
+        for precedence in sorted({self.pedmas[op][1] for op in ops}, reverse=True):
+            i = 0
+            while i < len(ops):
+                if self.pedmas[ops[i]][1] != precedence:
+                    i += 1
+                    continue
+                op = ops[i]
+                a, b = vals[i], vals[i + 1]
+                result = handle_edge(op, a, b)
+                vals[i] = result  # Replace first value with result
+                del vals[i + 1]   # Remove second value
+                del ops[i]        # Remove used operator
+
+        return vals[0]

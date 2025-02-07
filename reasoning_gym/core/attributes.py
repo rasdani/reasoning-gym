@@ -20,6 +20,7 @@ class AttributeDefinition:
     default_level: int
     description: str
     attr_type: AttributeType = AttributeType.STATIC  # Default to static
+    min_value: Optional[int] = None  # Minimum value for numeric attributes
 
     @classmethod
     def validate_attributes(cls, attributes: Dict[str, 'AttributeDefinition'], valid_types: Set[AttributeType], curriculum: str) -> None:
@@ -130,12 +131,13 @@ class AttributeDefinition:
             case AttributeType.STATIC:
                 # Returns exactly the value at current level
                 return lambda: self.levels[level]
-            
+
             case AttributeType.UBOUND:
-                # Returns random value up to current level bound
+                # Returns random value up to current level bound, respecting min_value
                 max_val = self.levels[level]
-                return lambda: rng.randint(0, max_val)
-            
+                min_val = self.min_value if self.min_value is not None else 0
+                return lambda: rng.randint(min_val, max_val)
+
             case AttributeType.APPEND:
                 # Returns random choice from accumulated values up to current level
                 available_values = self.levels[:level + 1]

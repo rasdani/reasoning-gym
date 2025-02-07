@@ -3,9 +3,8 @@ from enum import Enum
 import logging
 from collections import defaultdict
 import numpy as np
-from reasoning_gym.core.attribute_monitor import AttributeMonitor
+from reasoning_gym.core.attribute_monitor import AttributeMonitor, PerformanceTrend
 from reasoning_gym.core.exercise_registrar import ExerciseRegistrar
-from reasoning_gym.core.attribute_monitor import PerformanceTrend
 
 class CurriculumMode(Enum):
     """Mode of curriculum operation for the Principal."""
@@ -48,10 +47,11 @@ class Principal:
             raise KeyError(f"Principal: Exercise {exercise_name} not registered")
 
         exercise = self.exercises[exercise_name]
-        problem = exercise.generate()
+        curriculum = self.exercise_curricula[exercise_name]
+        problem = exercise.generate(curriculum)
         return problem
 
-    # TODO:Implement predefined
+    # TODO: Implement predefined
     def update_performance(self, exercise_name: str, attribute_name: str, 
                           score: float) -> None:
         """Update performance metrics for an attribute."""
