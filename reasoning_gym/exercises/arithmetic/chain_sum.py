@@ -35,7 +35,7 @@ class ChainSumExercise:
         for _ in range(max_attempts):
             try:
                 template = curriculum.get_template(curriculum.rng)
-                return template.eval(self, curriculum.rng)
+                return template.eval(self, curriculum.rng)  # Pass self to use exercise's parse/evaluate methods
             except ValueError as e:
                 if "Invalid operation" in str(e):
                     continue
@@ -47,13 +47,22 @@ class ChainSumExercise:
 
         Args:
             metadata: Raw metadata from template evaluation
+            Structure:
+            {
+                "expression": {
+                    "term_0": {"sign": "", "value": "3"},
+                    "op_0": "+",
+                    "term_1": {"sign": "", "value": "4"}
+                }
+            }
         Returns:
             Dictionary containing:
                 - values: List of numeric values
                 - operators: List of operators
                 - structure: Expression structure info
         """
-        expr_parts = metadata["expression"]["executed_parts"]
+        expr_parts = metadata["expression"]
+
         parsed = {
             "values": [],
             "operators": [],
@@ -66,20 +75,30 @@ class ChainSumExercise:
         # Extract values
         i = 0
         while f"term_{i}" in expr_parts:
-            val = expr_parts[f"term_{i}"].lstrip('+')
+            term = expr_parts[f"term_{i}"]
+            sign = term["sign"] if term["sign"] else ""
+            val = term["value"]
+
+            # Parse the value based on its format
             try:
                 num = val.lstrip('-')
                 if num.startswith(('0b', '0x')):
-                    sign = -1 if val.startswith('-') else 1
                     base = 2 if num.startswith('0b') else 16 if num.startswith('0x') else 10
-                    parsed["values"].append(sign * float(int(num[2:], base)))
-                    parsed["structure"]["notations"].append(f"base{base}")
+                    num_val = float(int(num[2:], base))
+                    notation = f"base{base}"
                 else:
-                    parsed["values"].append(float(val))
-                    parsed["structure"]["notations"].append("scientific" if 'e' in num.lower() else "regular")
+                    num_val = float(val)
+                    notation = "scientific" if 'e' in num.lower() else "regular"
+
+                # Apply sign
+                if sign == '-':
+                    num_val = -num_val
+
+                parsed["values"].append(num_val)
+                parsed["structure"]["notations"].append(notation)
             except ValueError:
-                parsed["values"].append(val)
-                parsed["structure"]["notations"].append("unknown")
+                raise ValueError(f"Failed to parse value: {val}")
+
             i += 1
 
         parsed["structure"]["num_terms"] = i
