@@ -15,11 +15,11 @@ class ExerciseRegistrar:
         """
         registered = {}
 
-        # Get all Dataset classes from exercises module
+        # Get all Exercise classes from exercises module
         for exercise_name in exercises.__all__:
-            if exercise_name.endswith('Dataset'):
+            if exercise_name.endswith('Exercise'):
                 exercise_class = getattr(exercises, exercise_name)
-                exercise_base = exercise_name[:-7]  # Remove 'Dataset'
+                exercise_base = exercise_name[:-7]  # Remove 'Exercise'
                 curriculum_name = f"{exercise_base}Curriculum"
 
                 if hasattr(curricula, curriculum_name):
