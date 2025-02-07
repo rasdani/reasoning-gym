@@ -9,7 +9,7 @@ Arithmetic tasks for training reasoning capabilities:
 
 # from .basic_arithmetic import BasicArithmeticDataset
 # from .calendar_arithmetic import CalendarArithmeticDataset
-from .chain_sum import ChainSumDataset
+from .chain_sum import ChainSumExercise
 # from .fraction_simplification import FractionSimplificationDataset
 # from .gcd import GcdDataset
 # from .lcm import LcmDataset
@@ -20,7 +20,7 @@ from .chain_sum import ChainSumDataset
 __all__ = [
     # "BasicArithmeticDataset",
     # "CalendarArithmeticDataset",
-    "ChainSumDataset",
+    "ChainSumExercise",
     # "FractionSimplificationDataset",
     # "GcdDataset",
     # "LcmDataset",

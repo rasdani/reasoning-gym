@@ -15,4 +15,4 @@ for module in [
     # algebra, algorithmic, arithmetic, code,
     # cognition, games, geometry, graphs, logic
 ]:
-    __all__.extend([name for name in module.__all__ if name.endswith('Dataset')]) 
+    __all__.extend([name for name in module.__all__ if name.endswith('Exercise')]) 

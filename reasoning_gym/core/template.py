@@ -103,40 +103,28 @@ class Template:
     def eval(self, exercise: Any, rng: random.Random) -> Dict[str, Any]:
         """Evaluate all placeholders and process exercise-specific logic"""
         values = {}
-        executed_parts = {}
+        metadata = {}
 
         for name, placeholder in self.placeholders.items():
             result = placeholder.eval(exercise, rng)
-            values[name] = result["question"]  # Use the formatted question for template
-            self.metadata[name] = result.get("metadata", {})
-            executed_parts[name] = result["metadata"]["executed_parts"]  # Use raw parts for parsing
+            values[name] = result["question"]
+            metadata[name] = result["metadata"]
 
         # Format question text
         question = self.question.format(**values)
 
         # Let exercise process the parts if it has the methods
         if hasattr(exercise, '_parse_expression') and hasattr(exercise, '_evaluate_expression'):
-            # Get executed parts from the expression metadata
-            expr_parts = executed_parts["expression"]
-            values, operators = exercise._parse_expression(expr_parts)
-            answer = exercise._evaluate_expression(values, operators)
-
+            parsed = exercise._parse_expression(metadata)
+            answer = exercise._evaluate_expression(parsed)
             return {
                 "question": question,
-                "answer": str(answer),
-                "metadata": {
-                    **self.metadata,
-                    "template": self.question,
-                    "values": values,
-                    "operators": operators
-                }
+                "answer": answer,
+                "metadata": parsed
             }
 
         # Default return if exercise doesn't handle parsing/evaluation
         return {
             "question": question,
-            "metadata": {
-                **self.metadata,
-                "template": self.question
-            }
+            "metadata": metadata
         }

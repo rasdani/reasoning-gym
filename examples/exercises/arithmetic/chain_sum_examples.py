@@ -5,14 +5,14 @@ by the ChainSum exercise at various difficulty levels.
 """
 
 from reasoning_gym.curricula.arithmetic.chain_sum_curriculum import ChainSumCurriculum
-from reasoning_gym.exercises.arithmetic.chain_sum import ChainSumDataset
+from reasoning_gym.exercises.arithmetic.chain_sum import ChainSumExercise
 import random
 import numpy as np
 
 def main():
 	# Initialize with fixed seed for reproducibility
 	curriculum = ChainSumCurriculum()
-	dataset = ChainSumDataset()
+	exercise = ChainSumExercise()
 	curriculum.rng = random.Random(42)
 
 	print("\n========================================\n")
@@ -24,7 +24,7 @@ def main():
 	curriculum.set_attr_level("num_decimals", 0)  # No decimals
 	curriculum.set_attr_level("sign", 0)  # No signs
 	curriculum.set_attr_level("notation", 0)  # Regular notation
-	problem = dataset.generate(curriculum)
+	problem = exercise.generate(curriculum)
 	print("Level 0 (Basic Addition):")
 	print(problem)
 
@@ -37,7 +37,7 @@ def main():
 	curriculum.set_attr_level("num_decimals", 1)  # 1 decimal place
 	curriculum.set_attr_level("sign", 2)  # Allow +/-
 	curriculum.set_attr_level("notation", 0)  # Regular notation
-	problem = dataset.generate(curriculum)
+	problem = exercise.generate(curriculum)
 	print("\nLevel 1 (Addition/Subtraction with Decimals):")
 	print(problem)
 
@@ -49,7 +49,7 @@ def main():
 	curriculum.set_attr_level("num_digits", 2)  # 1-10 digits
 	curriculum.set_attr_level("sign", 2)  # Allow +/-
 	curriculum.set_attr_level("notation", 1)  # Scientific notation
-	problem = dataset.generate(curriculum)
+	problem = exercise.generate(curriculum)
 	print("\nLevel 2 (Mixed Operations with Scientific Notation):")
 	print(problem)
 
@@ -61,7 +61,7 @@ def main():
 	curriculum.set_attr_level("num_digits", 2)  # 1-10 digits
 	curriculum.set_attr_level("sign", 2)  # Allow +/-
 	curriculum.set_attr_level("notation", 3)  # All notations
-	problem = dataset.generate(curriculum)
+	problem = exercise.generate(curriculum)
 	print("\nLevel 3 (Complex Expressions with Mixed Notations):")
 	print(problem)
 
@@ -78,7 +78,7 @@ def main():
 		curriculum.set_attr_level("num_decimals", random.randint(0, 3))
 		curriculum.set_attr_level("sign", random.randint(0, 2))
 		curriculum.set_attr_level("notation", random.randint(0, 3))
-		problem = dataset.generate(curriculum)
+		problem = exercise.generate(curriculum)
 		print(f"\nRandom Example (Seed {seed}):")
 		print(problem)
 
@@ -92,7 +92,7 @@ def main():
 	curriculum.set_attr_level("num_terms", 2)  # 2-4 terms
 	curriculum.set_attr_level("num_digits", 2)  # Large numbers
 	curriculum.set_attr_level("notation", 3)  # Mixed notations
-	problem = dataset.generate(curriculum)
+	problem = exercise.generate(curriculum)
 	print("\nLarge Numbers with Mixed Notation:")
 	print(problem)
 
@@ -101,7 +101,7 @@ def main():
 	curriculum.set_attr_level("num_terms", 3)  # Maximum terms
 	curriculum.set_attr_level("num_digits", 1)  # Medium numbers
 	curriculum.set_attr_level("notation", 0)  # Regular notation
-	problem = dataset.generate(curriculum)
+	problem = exercise.generate(curriculum)
 	print("\nMaximum Terms with All Operators:")
 	print(problem)
 
@@ -109,7 +109,7 @@ def main():
 	curriculum.set_attr_level("operators", 1)  # +, -
 	curriculum.set_attr_level("num_terms", 2)  # 3-4 terms
 	curriculum.set_attr_level("notation", 3)  # All notations
-	problem = dataset.generate(curriculum)
+	problem = exercise.generate(curriculum)
 	print("\nBinary and Hex Mixed:")
 	print(problem)
 
