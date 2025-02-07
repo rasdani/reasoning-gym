@@ -7,24 +7,36 @@ Arithmetic tasks for training reasoning capabilities:
 - Time intervals
 """
 
-# from .basic_arithmetic import BasicArithmeticDataset
-# from .calendar_arithmetic import CalendarArithmeticDataset
-from .chain_sum import ChainSumDataset
-# from .fraction_simplification import FractionSimplificationDataset
-# from .gcd import GcdDataset
-# from .lcm import LcmDataset
-# from .leg_counting import LegCountingDataset
-# from .prime_factorization import PrimeFactorizationDataset
-# from .time_intervals import TimeIntervalsDataset
+from .basic_arithmetic import BasicArithmeticDataset, BasicArithmeticDatasetConfig
+from .calendar_arithmetic import CalendarArithmeticConfig, CalendarArithmeticDataset
+from .chain_sum import ChainSum, ChainSumConfig
+from .fraction_simplification import FractionSimplificationConfig, FractionSimplificationDataset
+from .gcd import GCDConfig, GCDDataset
+from .lcm import LCMConfig, LCMDataset
+from .leg_counting import LegCountingConfig, LegCountingDataset
+from .prime_factorization import PrimeFactorizationConfig, PrimeFactorizationDataset
+from .time_intervals import TimeIntervalsConfig, TimeIntervalsDataset
 
 __all__ = [
-    # "BasicArithmeticDataset",
-    # "CalendarArithmeticDataset",
-    "ChainSumDataset",
-    # "FractionSimplificationDataset",
-    # "GcdDataset",
-    # "LcmDataset",
-    # "LegCountingDataset",
-    # "PrimeFactorizationDataset",
-    # "TimeIntervalsDataset",
+    "BasicArithmeticDataset",
+    "BasicArithmeticDatasetConfig",
+    "basic_arithmetic_dataset",
+    "ChainSum",
+    "ChainSumConfig",
+    "CalendarArithmeticConfig",
+    "CalendarArithmeticDataset",
+    "Weekday",
+    "CalendarTask",
+    "FractionSimplificationConfig",
+    "FractionSimplificationDataset",
+    "GCDConfig",
+    "GCDDataset",
+    "LCMConfig",
+    "LCMDataset",
+    "LegCountingConfig",
+    "LegCountingDataset",
+    "PrimeFactorizationConfig",
+    "PrimeFactorizationDataset",
+    "TimeIntervalsConfig",
+    "TimeIntervalsDataset",
 ]
