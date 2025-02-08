@@ -21,11 +21,29 @@ def execute_template(template_str: str, parts: Dict[str, str | Callable], refs: 
             )
             values[name] = result["question"]
             executed_parts[name] = result["executed_parts"]
+        # Direct value generator
+        elif callable(part):
+            # Execute the callable
+            result = part(refs) if "refs" in part.__code__.co_varnames else part()
+
+            # Check if result is a template
+            if isinstance(result, dict) and "template" in result and "parts" in result:
+                # Handle nested template
+                nested_result = execute_template(
+                    result["template"],
+                    result["parts"],
+                    refs
+                )
+                values[name] = nested_result["question"]
+                executed_parts[name] = nested_result["executed_parts"]
+            else:
+                # Direct value
+                values[name] = str(result)
+                executed_parts[name] = result
         else:
-            # Direct value generator
-            value = part(refs) if "refs" in part.__code__.co_varnames else part()
-            values[name] = str(value)
-            executed_parts[name] = str(value)  # Store value directly without nesting
+            # Static value
+            values[name] = str(part)
+            executed_parts[name] = part
 
     return {
         "question": template_str.format(**values),
