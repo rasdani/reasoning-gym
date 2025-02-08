@@ -397,7 +397,7 @@ class TestChainSumGenerate(unittest.TestCase):
     def test_comprehensive_random_evaluation(self):
         """Test 1000 random problems across all levels to verify correct evaluation"""
         num_samples = 1000
-        
+
         # Statistics tracking
         stats = {
             'operator_counts': {},      # Count of each operator used

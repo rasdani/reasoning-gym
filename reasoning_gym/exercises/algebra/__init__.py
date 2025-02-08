@@ -1,9 +1,7 @@
-from .polynomial_equations import PolynomialEquationsConfig, PolynomialEquationsDataset
-from .simple_equations import SimpleEquationsConfig, SimpleEquationsDataset
+from .polynomial_equations import PolynomialEquationsExercise
+# from .simple_equations import SimpleEquationsConfig, SimpleEquationsDataset
 
 __all__ = [
-    "SimpleEquationsDataset",
-    "SimpleEquationsConfig",
-    "PolynomialEquationsConfig",
-    "PolynomialEquationsDataset",
+    # "SimpleEquationsDataset",
+    "PolynomialEquationsExercise",
 ]
