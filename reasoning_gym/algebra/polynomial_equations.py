@@ -1,150 +1,115 @@
-import random
-import string
-from dataclasses import dataclass
-from typing import Optional, Tuple
+"""
+Polynomial equation exercise that generates equations and finds their real solutions.
+"""
 
-from sympy import Eq, Symbol, expand, solve
+from typing import Dict, Any
+from sympy import Symbol, expand, solve, Eq, parse_expr
 
-from ..factory import ProceduralDataset, register_dataset
-
-
-@dataclass
-class PolynomialEquationsConfig:
+class PolynomialEquationsExercise:
     """
-    Configuration for polynomial equation task generation.
+    Generates random polynomial equations and finds their real solutions.
+    The polynomial is formed by summing random terms of the form: coeff * x^exponent.
+    Then we solve "polynomial_expr = 0" using Sympy.
     """
 
-    min_terms: int = 2  # Minimum number of polynomial terms
-    max_terms: int = 4  # Maximum number of polynomial terms
-    min_value: int = 1  # Minimum value for coefficients
-    max_value: int = 100  # Maximum value for coefficients
-    min_degree: int = 1  # Minimum polynomial degree
-    max_degree: int = 3  # Maximum polynomial degree
-    operators: Tuple[str, ...] = (
-        "+",
-        "-",
-    )  # Allowed operators between terms, Avoid adding '*' or '/' because they will affect the degree
-    seed: Optional[int] = None
-    size: int = 500
+    def __init__(self):
+        self.curriculum = None
 
-    def validate(self) -> None:
-        """Validate configuration parameters."""
-        assert self.min_terms > 0, "min_terms must be positive."
-        assert self.max_terms >= self.min_terms, "max_terms must be >= min_terms."
-
-        assert self.min_value > 0, "min_value must be positive."
-        assert self.max_value >= self.min_value, "max_value must be >= min_value."
-
-        assert self.min_degree >= 1, "min_degree must be >= 1."
-        assert self.max_degree >= self.min_degree, "max_degree must be >= min_degree."
-
-        allowed_ops = {"+", "-"}
-        assert len(self.operators) > 0, "operators tuple cannot be empty."
-        assert all(op in allowed_ops for op in self.operators), "Invalid operator found. Must be a subset of {+, -}."
-
-
-class PolynomialEquationsDataset(ProceduralDataset):
-    """
-    Generates random polynomial equations of degree in [min_degree, max_degree].
-    - The polynomial is formed by summing random terms of the form: coeff * x^exponent.
-    - Then we solve "polynomial_expr = 0" using Sympy.
-    - The solution may be real or complex; we filter real solutions by default for simplicity.
-    """
-
-    def __init__(self, config: PolynomialEquationsConfig):
-        self._prompt_templates = [
-            "Find the real value(s) of {variable} in the equation: {polynomial_expanded} = 0",
-            "Solve for real {variable}: {polynomial_expanded} = 0",
-            "Determine the real value(s) of {variable} tha satisfies: {polynomial_expanded} = 0",
-            "Solve the polynomial equation for real {variable}:\n{polynomial_expanded} = 0",
-        ]
-        super().__init__(config=config, seed=config.seed, size=config.size)
-
-    def __getitem__(self, idx: int) -> dict:
+    def generate(self, curriculum: Any) -> Dict[str, Any]:
         """
-        Generate a single polynomial equation item.
+        Generate a polynomial equation problem using the curriculum.
 
         Returns:
-            A dict with:
+            Dict containing:
                 - question: str (e.g. "Solve the polynomial equation: 2*x^2 - 3*x + 1 = 0")
                 - answer: str (the sorted list of real solutions, e.g. "[0.5, 1.0]")
-                - metadata: dict with details (polynomial_expr, degree, etc.)
+                - metadata: dict with details (polynomial_expr, symbolic_info, etc.)
         """
-        rng = random.Random(self.seed + idx)
+        self.curriculum = curriculum
+        template = curriculum.get_template(curriculum.rng)
+        return template.eval(self, curriculum.rng)
 
-        # Get variable and generate polynomial equation in standard form
-        variable = self._get_variable(rng)
-        degree = rng.randint(self.config.min_degree, self.config.max_degree)
-        polynomial_expr = self._generate_polynomial_expr(rng, variable, degree)
-        polynomial_expanded = expand(polynomial_expr)
+    def _parse_expression(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse the template metadata into structured data.
 
-        # Solve the polynomial = 0
-        # We filter real solutions only
-        solutions = solve(Eq(polynomial_expanded, 0), variable, dict=False)
-        real_solutions = []
-        for sol in solutions:
-            if sol.is_real:
-                # Evaluate symbolic solution to a floating approximation
-                real_solutions.append(float(sol.evalf()))
-        real_solutions.sort()
-        answer_str = str(real_solutions)
-
-        return {
-            "question": rng.choice(self._prompt_templates).format(
-                variable=variable,
-                polynomial_expanded=polynomial_expanded,
-            ),
-            "answer": answer_str,
-            "metadata": {
-                "polynomial_expr": str(polynomial_expanded),
-                "variable": variable,
-                "degree": degree,
-                "real_solutions": real_solutions,
+        The metadata structure is expected to be:
+        {
+            "expression": {
+                "term_0": {
+                    "sign": str,      # "" or "-"
+                    "coeff": str,     # coefficient value with "*" if needed
+                    "variable": str,  # variable name or empty
+                    "exponent": str   # "**N" for degree N > 1, or empty
+                },
+                "term_1": {...},      # Same structure as term_0
+                ...,
+                "op_0": str,         # "+" or "-" between terms
+                "op_1": str,         # More operators if needed
+                ...
             },
+            "variable": {
+                "var": str           # The variable name used in the equation
+            }
         }
 
-    def _get_variable(self, rng: random.Random) -> str:
-        """Get a random lowercase variable name"""
-        return rng.choice(string.ascii_lowercase)
-
-    def _generate_polynomial_expr(self, rng: random.Random, variable: Symbol, degree: int):
-        """
-        Randomly generate a polynomial expression of 'degree'.
-        We'll use the config parameters:
-            - min_terms, max_terms: how many total terms to combine
-            - min_value, max_value: range for coefficients
-            - operators: to decide sign flips or direct addition
-
-         Args:
-            rng: Random number generator
-            variable: Variable symbol to use in equation
-            degree: Highest degree. We ensure that there is at least one term with exponent=degree
-
+        Args:
+            metadata: Raw metadata from template evaluation
         Returns:
-            Polynomial string
+            Dictionary containing:
+                - terms: List[str] of formatted term strings
+                - operators: List[str] of operators between terms
+                - variable: str, the variable name used
         """
-        x = Symbol(variable)
+        expr_parts = metadata["expression"]
 
-        # Choose the number of terms and their respective degrees
-        num_terms = rng.randint(self.config.min_terms, self.config.max_terms)
-        # Keep track of exponents, exponents can repeat or skip but we force the highest exponent
-        chosen_exponents = [degree]
-        # Fill the rest randomly in [0, degree]
-        for _ in range(num_terms - 1):
-            exp = rng.randint(0, degree)
-            chosen_exponents.append(exp)
+        # Extract terms and operators
+        terms = []
+        operators = []
+        i = 0
+        while f"term_{i}" in expr_parts:
+            term_dict = expr_parts[f"term_{i}"]
+            terms.append("".join(term_dict[k] for k in ("sign", "coeff", "variable", "exponent")))
+            # Get operator if it exists
+            if f"op_{i}" in expr_parts:
+                operators.append(expr_parts[f"op_{i}"])
+            i += 1
 
-        # Now build the polynomial expression: sum_{term}( coeff * x^exponent ), with optional sign
-        polynomial_expr = 0
-        for exp in chosen_exponents:
-            coeff = rng.randint(self.config.min_value, self.config.max_value)
-            # If '-' in operators, we can randomly flip the sign
-            if "-" in self.config.operators and rng.random() < 0.5:
-                coeff = -coeff
-            term_expr = coeff * (x**exp)
-            polynomial_expr += term_expr
+        return {
+            "terms": terms,
+            "operators": operators,
+            "variable": metadata["variable"]["var"]
+        }
 
-        return polynomial_expr
+    def _evaluate_expression(self, parsed: Dict[str, Any]) -> str:
+        """
+        Evaluate the polynomial equation and find its real solutions.
 
+        Args:
+            parsed: Dictionary containing parsed expression data
+        Returns:
+            String representation of the sorted list of real solutions
+        """
+        # Create sympy symbol from parsed variable
+        var = Symbol(parsed["variable"])
 
-register_dataset("polynomial_equations", PolynomialEquationsDataset, PolynomialEquationsConfig)
+        # Build expression from parsed terms and operators
+        expr = parsed["terms"][0]
+        for i, op in enumerate(parsed["operators"]):
+            expr = f"{expr} {op} {parsed['terms'][i + 1]}"
+
+        try:
+            sympy_expr = parse_expr(expr, local_dict={parsed["variable"]: var})
+            expanded = expand(sympy_expr)
+            solutions = solve(Eq(expanded, 0), var, dict=False)
+
+            # Filter and sort real solutions
+            real_solutions = []
+            for sol in solutions:
+                if sol.is_real:
+                    real_solutions.append(float(sol.evalf()))
+            real_solutions.sort()
+
+            return str(real_solutions)
+        except Exception as e:
+            return f"Error evaluating expression: {expr}\nError: {str(e)}"
