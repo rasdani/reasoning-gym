@@ -20,7 +20,6 @@ class SimpleEquationsCurriculum(BaseCurriculum):
             AttributeType.STATIC,   # For operators
             AttributeType.UBOUND,   # For ranges like num_terms, value
             AttributeType.APPEND,   # For operators that accumulate
-            AttributeType.APPEND_LIST  # For variables that accumulate
         }
 
         # Define attributes
@@ -55,7 +54,7 @@ class SimpleEquationsCurriculum(BaseCurriculum):
                 levels=[list("xyz"), list(string.ascii_lowercase), list("αβγρθφψω")],
                 default_level=0,
                 description="Variables to use in equations",
-                attr_type=AttributeType.APPEND_LIST
+                attr_type=AttributeType.APPEND
             )
         }
 

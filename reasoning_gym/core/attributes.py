@@ -12,7 +12,6 @@ class AttributeType(Enum):
     STATIC = "static"    # Each level is independent
     UBOUND = "ubound"    # Each level is an upper bound
     APPEND = "append"    # Each level includes all previous levels
-    APPEND_LIST = "append_list"    # Each level includes all previous levels
 
 @dataclass
 class AttributeDefinition:
@@ -142,11 +141,10 @@ class AttributeDefinition:
             case AttributeType.APPEND:
                 # Returns random choice from accumulated values up to current level
                 available_values = self.levels[:level + 1]
-                return lambda: rng.choice(available_values)
-
-            case AttributeType.APPEND_LIST:
-                # Returns random choice from accumulated values up to current level
-                available_values = sum(self.levels[:level + 1], [])
+                if isinstance(self.levels[0], list):
+                    available_values = sum(available_values, [])
+                elif isinstance(self.levels[0], dict):
+                    available_values = [{k: v for d in available_values for k, v in d.items()}]
                 return lambda: rng.choice(available_values)
 
         raise ValueError(f"Unknown attribute type: {self.attr_type} for attribute '{self.description}'")

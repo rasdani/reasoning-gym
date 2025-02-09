@@ -20,7 +20,6 @@ class PolynomialEquationsCurriculum(BaseCurriculum):
             AttributeType.STATIC,   # For operators
             AttributeType.UBOUND,   # For ranges like num_terms, degree, value
             AttributeType.APPEND,    # For operators that accumulate
-            AttributeType.APPEND_LIST    # For variables that accumulate
         }
 
         # Define attributes
@@ -61,7 +60,7 @@ class PolynomialEquationsCurriculum(BaseCurriculum):
                 levels=[list("xyz"), list(string.ascii_lowercase + string.ascii_uppercase), list("αβγρθφψω")],
                 default_level=0,
                 description="Variables to use in polynomials",
-                attr_type=AttributeType.APPEND_LIST
+                attr_type=AttributeType.APPEND
             )
         }
 
