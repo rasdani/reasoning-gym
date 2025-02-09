@@ -6,40 +6,29 @@ Algorithmic tasks for training reasoning capabilities:
 - Pattern matching
 """
 
-from .base_conversion import BaseConversionConfig, BaseConversionDataset
-from .caesar_cipher import CaesarCipherConfig, CaesarCipherDataset
-from .letter_counting import LetterCountingConfig, LetterCountingDataset
-from .letter_jumble import LetterJumbleConfig, LetterJumbleDataset
-from .number_filtering import NumberFilteringConfig, NumberFilteringDataset
-from .number_sorting import NumberSortingConfig, NumberSortingDataset
-from .sentence_reordering import SentenceReorderingConfig, SentenceReorderingDataset
-from .spell_backward import SpellBackwardConfig, SpellBackwardDataset
-from .word_ladder import WordLadderConfig, WordLadderDataset
-from .word_sequence_reversal import WordSequenceReversalConfig, WordSequenceReversalDataset
-from .word_sorting import TextTransformation, WordSortingConfig, WordSortingDataset
+from .base_conversion import BaseConversionExercise
+# from .caesar_cipher import CaesarCipherExercise
+# from .letter_counting import LetterCountingExercise
+# from .letter_jumble import LetterJumbleExercise
+# from .number_filtering import NumberFilteringExercise
+# from .number_sorting import NumberSortingExercise
+# from .sentence_reordering import SentenceReorderingExercise
+# from .spell_backward import SpellBackwardExercise
+# from .word_ladder import WordLadderExercise
+# from .word_sequence_reversal import WordSequenceReversalExercise
+# from .word_sorting import TextTransformation, WordSortingExercise
 
 __all__ = [
-    "SpellBackwardConfig",
-    "SpellBackwardDataset",
-    "BaseConversionConfig",
-    "BaseConversionDataset",
-    "CaesarCipherConfig",
-    "CaesarCipherDataset",
-    "LetterCountingConfig",
-    "LetterCountingDataset",
-    "LetterJumbleConfig",
-    "LetterJumbleDataset",
-    "NumberFilteringConfig",
-    "NumberFilteringDataset",
-    "NumberSortingConfig",
-    "NumberSortingDataset",
-    "SentenceReorderingConfig",
-    "SentenceReorderingDataset",
-    "WordSequenceReversalConfig",
-    "WordSequenceReversalDataset",
-    "WordSortingConfig",
-    "WordSortingDataset",
-    "TextTransformation",
-    "WordLadderConfig",
-    "WordLadderDataset",
+    # "SpellBackwardDataset",
+    "BaseConversionExercise",
+    # "CaesarCipherDataset",
+    # "LetterCountingDataset",
+    # "LetterJumbleDataset",
+    # "NumberFilteringDataset",
+    # "NumberSortingDataset",
+    # "SentenceReorderingDataset",
+    # "WordSequenceReversalDataset",
+    # "WordSortingDataset",
+    # "TextTransformation",
+    # "WordLadderDataset",
 ]
