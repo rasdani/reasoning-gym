@@ -105,8 +105,9 @@ class CaesarCipherCurriculum(BaseCurriculum):
                     )
                 )[-1],
                 "read_text": lambda refs: (
-                    idx := refs["dataset_rng"].randint(0, len(self.text_data) - 1),
-                    " ".join(self.text_data[idx:idx+refs["num_words"]()])
+                    n_words := refs["num_words"](),
+                    idx := refs["dataset_rng"].randint(0, len(self.text_data) - n_words),
+                    " ".join(self.text_data[idx:idx+n_words])
                 )[-1]
             }
         } 
