@@ -9,7 +9,7 @@ Algorithmic tasks for training reasoning capabilities:
 from .base_conversion import BaseConversionExercise
 from .caesar_cipher import CaesarCipherExercise
 from .letter_counting import LetterCountingExercise
-# from .letter_jumble import LetterJumbleExercise
+from .letter_jumble import LetterJumbleExercise
 # from .number_filtering import NumberFilteringExercise
 # from .number_sorting import NumberSortingExercise
 # from .sentence_reordering import SentenceReorderingExercise
@@ -23,7 +23,7 @@ __all__ = [
     "BaseConversionExercise",
     "CaesarCipherExercise",
     "LetterCountingExercise",
-    # "LetterJumbleDataset",
+    "LetterJumbleExercise",
     # "NumberFilteringDataset",
     # "NumberSortingDataset",
     # "SentenceReorderingDataset",
