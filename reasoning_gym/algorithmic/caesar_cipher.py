@@ -1,10 +1,8 @@
 """Caesar cipher task generator"""
 
-import re
 from dataclasses import dataclass
 from random import Random
-from string import ascii_uppercase
-from typing import List, Optional
+from typing import Optional
 
 from reasoning_gym.data import read_data_file
 
@@ -75,7 +73,7 @@ class CaesarCipherDataset(ProceduralDataset):
         cipher_text = self._caesar_encrypt(sentence, rotation)
 
         return {
-            "question": f"Decrypt this Caesar cipher text: {cipher_text}",
+            "question": f"Decrypt this Caesar cipher text: {cipher_text}. Provide only the decrypted text as your final answer.",
             "answer": sentence,
             "metadata": {"rotation": rotation, "cipher_text": cipher_text, "clear_text": sentence},
         }
