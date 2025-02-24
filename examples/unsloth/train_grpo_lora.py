@@ -11,6 +11,7 @@ PatchFastRL("GRPO", FastLanguageModel)
 import argparse
 import logging
 import re
+import os
 
 import torch
 from torch.utils.data import Dataset
@@ -91,6 +92,12 @@ class GRPOTrainerCustom(GRPOTrainer):
 
     def _accuracy_reward(self, completions, metadata, **kwargs):
         answers = [utils.extract_answer(completion) for completion in completions]
+        for completion, answer, md in zip(completions, answers, metadata):
+            print(completion)
+            print("ANSWER:\t\t", answer)
+            print("GROUND TRUTH:\t", md["answer"])
+            print("SCORE:\t\t", self.train_dataset.data.score_answer(answer, entry=md))
+            print()
         return [self.train_dataset.data.score_answer(answer, entry=obj) for (answer, obj) in zip(answers, metadata)]
 
 
@@ -132,6 +139,11 @@ def evaluate(model, tokenizer, dataset, *args, **kwargs):
         score = dataset.data.score_answer(answer, entry=metadata)
         correct_preds += score
         total_preds += 1
+        print(generated_text)
+        print("ANSWER:\t\t", answer)
+        print("GROUND TRUTH:\t", metadata)
+        print("SCORE:\t\t", score)
+        print()
 
     return correct_preds / total_preds
 
@@ -141,7 +153,8 @@ def main(args):
         args.model_id, args.max_seq_length, args.lora_rank, args.quantize, args.gpu_memory_utilization
     )
 
-    developer_prompt = utils.SYSTEM_PROMPTS["DeepSeekZero"]
+    # developer_prompt = utils.SYSTEM_PROMPTS["DeepSeekZero"]
+    developer_prompt = utils.SYSTEM_PROMPTS["QwenCustom"]
     dataset = ReasoningGymDataset(args.dataset_name, args.dataset_seed, args.dataset_size, tokenizer, developer_prompt)
 
     training_args = GRPOConfig(
@@ -161,8 +174,10 @@ def main(args):
         gradient_accumulation_steps=1,
         num_generations=args.num_generations,
         num_train_epochs=args.train_epochs,
+        # max_steps=30,
         save_steps=100,
         max_grad_norm=0.1,
+        report_to = "wandb",
     )
 
     train(model, tokenizer, dataset, training_args)
@@ -180,6 +195,8 @@ def main(args):
     accuracy = evaluate(model, tokenizer, eval_dataset, max_new_tokens=training_args.max_completion_length)
     logging.info(f"Evaluation accuracy: {accuracy * 100}%")
 
+    model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit",)
+    model.push_to_hub_merged("rasdani/Qwen2.5-1.5B-Instruct-GRPO-rg", tokenizer, save_method = "merged_16bit", token = os.environ["HF_TOKEN"])
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -196,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument("--train-epochs", type=int, default=1)
     parser.add_argument("--train-batch-size", type=int, default=8)
 
-    parser.add_argument("--dataset-seed", type=int, default=42)
+    parser.add_argument("--dataset-seed", type=int, default=24)
     parser.add_argument("--dataset-size", type=int, default=1000)
 
     parser.add_argument("--eval-seed", type=int, default=42)

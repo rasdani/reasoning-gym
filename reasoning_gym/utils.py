@@ -10,6 +10,11 @@ The assistant first thinks about the reasoning process in the mind and then prov
 <answer>answer here</answer>
 Do not explain your reasoning inside the answer tags, provide only the final answer. When an example is provided, you should strictly follow the format of the output/answer in that example.
 """,
+    "QwenCustom": """You are Qwen, created by Alibaba Cloud. You are a helpful assistant.
+You first think about the reasoning process in your mind and then provide the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> your reasoning process goes here </think>
+<answer>your answer goes here</answer>
+Do not explain your reasoning inside the answer tags, provide only the final answer. When an example is provided, you should strictly follow the format of the output/answer in that example.
+""",
     "default": """Given a problem, your task is to answer the question by thinking step-by-step in a clear and specific manner.
 Once you have thought about the reasoning process, provide the answer in the following format:
 <answer>answer here</answer>
