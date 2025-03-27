@@ -5,7 +5,10 @@ from typing import Any, Optional
 
 from sympy import Eq, Symbol, expand, solve
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "polynomial_equations"
 
 
 @dataclass
@@ -27,8 +30,9 @@ class PolynomialEquationsConfig:
     seed: Optional[int] = None
     size: int = 500
     # reward function hyperparameters
-    penalty_missing_factor = 0.1
-    penalty_extra_factor = 0.05
+    penalty_missing_factor = 0.5
+    penalty_extra_factor = 0.5
+    exp_distance_factor = -10.0
 
     def validate(self) -> None:
         """Validate configuration parameters."""
@@ -62,12 +66,15 @@ class PolynomialEquationsDataset(ProceduralDataset):
             "Solve the polynomial equation for real {variable}:\n{polynomial_expanded} = 0",
         ]
         self.added_instruction = """
-In solving the equations, please abide by the following instruction:
-## 1. All answers should be comma-separated. For example "-0.3773, 0.4005" etc.
-## 2. In cases where your answer is b = 2 + sqrt(4560) / 172 and b = 2 - sqrt(4560) / 172. Since b can be 2 numbers, resolve your answer like this instead, "-0.3773, 0.4005".
-## 3. If there are no real values of i that satisfy the equation, report your answer as empty string, "".
-## 4. If there are 2 answers, resolve the answers as comma-separated floats of 2 numbers, if 3 answers, make it comma-separated floats of 3 numbers.
-## 5. Resolve all numbers as floats in the string of comma-separated numbers. Round the floats higher than 4 decimal place(d.p) down to 4 d.p.
+In solving equations, please follow these instructions:
+1. Provide all answers as comma-separated decimal values. For example: "-0.3773, 0.4005"
+2. For solutions that can be expressed in exact form (like "u = 2 + sqrt(4560)/172" and "u = 2 - sqrt(4560)/172"), convert them to decimal form in your final answer.
+3. If there are no real values that satisfy the equation, report your answer as an empty string: ""
+4. Format your answer based on the number of solutions:
+   - For 1 solution: a single decimal number
+   - For 2 solutions: two comma-separated decimal numbers
+   - For 3 or more solutions: all values as comma-separated decimal numbers
+5. Round all decimal values to 4 decimal places (rounding down when the 5th decimal place is 5 or greater).
 """
         super().__init__(config=config, seed=config.seed, size=config.size)
 
@@ -82,11 +89,14 @@ In solving the equations, please abide by the following instruction:
                 - metadata: dict with details (polynomial_expr, degree, etc.)
         """
         rng = random.Random(self.seed + idx)
-        for _ in range(8):
+        for _ in range(
+            20
+        ):  # Increase the number of attempts to get a solvable polynomial - many solutions only real solution is 0
             # Get variable and generate polynomial equation in standard form
             variable = self._get_variable(rng)
             degree = rng.randint(self.config.min_degree, self.config.max_degree)
-            polynomial_expr = self._generate_polynomial_expr(rng, variable, degree)
+            num_terms = rng.randint(self.config.min_terms, self.config.max_terms)
+            polynomial_expr = self._generate_polynomial_expr(rng, variable, degree, num_terms)
             polynomial_expanded = expand(polynomial_expr)
 
             # Solve the polynomial = 0
@@ -112,10 +122,17 @@ In solving the equations, please abide by the following instruction:
             "question": question,
             "answer": answer_str,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "polynomial_expr": str(polynomial_expanded),
                 "variable": variable,
                 "degree": degree,
                 "real_solutions": real_solutions,
+                "num_terms": num_terms,
+                "difficulty": {
+                    "terms": (self.config.min_terms, self.config.max_terms),
+                    "degree": (self.config.min_degree, self.config.max_degree),
+                },
             },
         }
 
@@ -123,7 +140,7 @@ In solving the equations, please abide by the following instruction:
         """Get a random lowercase variable name"""
         return rng.choice("abcdefghklmnopqrstuvwxyz")  # remove ij to avoid confusion with complex numbers
 
-    def _generate_polynomial_expr(self, rng: random.Random, variable: Symbol, degree: int):
+    def _generate_polynomial_expr(self, rng: random.Random, variable: Symbol, degree: int, num_terms: int):
         """
         Randomly generate a polynomial expression of 'degree'.
         We'll use the config parameters:
@@ -142,7 +159,6 @@ In solving the equations, please abide by the following instruction:
         x = Symbol(variable)
 
         # Choose the number of terms and their respective degrees
-        num_terms = rng.randint(self.config.min_terms, self.config.max_terms)
         # Keep track of exponents, exponents can repeat or skip but we force the highest exponent
         chosen_exponents = [degree]
         # Fill the rest randomly in [0, degree]
@@ -238,7 +254,7 @@ In solving the equations, please abide by the following instruction:
                 # Remove matched oracle solution
                 oracle_solutions.pop(matched_distance_index)
                 # Exponential decay reward
-                total_reward += math.exp(-matched_distance)
+                total_reward += math.exp(matched_distance * self.config.exp_distance_factor)
             else:
                 # Extra predicted solution
                 extra_solutions += 1
@@ -262,4 +278,25 @@ In solving the equations, please abide by the following instruction:
         return final_reward
 
 
-register_dataset("polynomial_equations", PolynomialEquationsDataset, PolynomialEquationsConfig)
+class PolynomialEquationsCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(PolynomialEquationsCurriculum.__name__, PolynomialEquationsConfig)
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="degree",
+                levels=[1, 2, 3, 4],
+                lower_field_name="min_degree",
+                upper_field_name="max_degree",
+                description="The degree of the polynomial equation",
+            ),
+            RangeAttributeDefinition(
+                name="terms",
+                levels=[2, 3, 4, 5],
+                lower_field_name="min_terms",
+                upper_field_name="max_terms",
+                description="The number of terms in the polynomial equation",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, PolynomialEquationsDataset, PolynomialEquationsConfig, PolynomialEquationsCurriculum)

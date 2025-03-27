@@ -5,7 +5,10 @@ from typing import Any, Optional
 
 import sympy
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "simple_integration"
 
 
 @dataclass
@@ -42,9 +45,9 @@ class SimpleIntegrationDataset(ProceduralDataset):
             "Evaluate the indefinite integral: ∫ {integrand} dx",
         ]
         self.added_instruction = """
-In addition, When doing calculation, Use the following instructions together with your mathematical ingenuity to solve the integral problems
-## 1. Use ** instead ^ to represent powers. For example 7*X**2 instead of 7*X^2.
-## 2. Always use * when doing all sorts of multiplcation in your reasoning steps. For example Use [-3*X**3*sin(X) - 9*X**2*cos(X) + 18*X*sin(X) + 18*cos(X) + C] instead of [-3x3sin(x) - 9x2cos(x) + 18xsin(x) + 18cos(x) + C].
+When performing calculations, please follow these guidelines:
+1. Use ** instead of ^ to represent exponents. For example, write 7*X**2 instead of 7*X^2.
+2. Always include the * symbol for all multiplication operations in your reasoning steps. For example, write `-3*X**3*sin(X) - 9*X**2*cos(X) + 18*X*sin(X) + 18*cos(X) + C` instead of `-3x3sin(x) - 9x2cos(x) + 18xsin(x) + 18cos(x) + C`.
 """
         super().__init__(config=config, seed=config.seed, size=config.size)
 
@@ -55,12 +58,12 @@ In addition, When doing calculation, Use the following instructions together wit
         denominator = rng.randint(2, 10)
         return Fraction(rng.randint(self.config.min_bounds, self.config.max_bounds), denominator)
 
-    def _generate_polynomial(self, rng: random.Random) -> tuple[sympy.Symbol, sympy.Expr]:
+    def _generate_polynomial(self, rng: random.Random, num_terms: int) -> tuple[sympy.Symbol, sympy.Expr]:
         """Generate a random polynomial with one variable"""
         terms = []
         x = sympy.Symbol(rng.choice(self.config.symbols))
 
-        for _ in range(rng.randint(self.config.min_terms, self.config.max_terms)):
+        for _ in range(num_terms):
             coefficient = self._generate_coefficient(rng)
             degree = rng.randint(self.config.min_degree, self.config.max_degree)
             operator = rng.choice(self.config.operators)
@@ -72,7 +75,8 @@ In addition, When doing calculation, Use the following instructions together wit
 
     def __getitem__(self, idx: int) -> dict:
         rng = random.Random(self.seed + idx)
-        symbol, polynomial = self._generate_polynomial(rng)
+        num_terms = rng.randint(self.config.min_terms, self.config.max_terms)
+        symbol, polynomial = self._generate_polynomial(rng, num_terms)
         derivative = sympy.diff(polynomial, symbol)
         question = rng.choice(self._prompt_templates).format(integrand=derivative) + self.added_instruction
 
@@ -80,9 +84,15 @@ In addition, When doing calculation, Use the following instructions together wit
             "question": question,
             "answer": str(polynomial) + " + C",
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "integrand": str(derivative),
                 "variable": str(symbol),
                 "expected_answer_expression": polynomial,
+                "num_terms": num_terms,
+                "difficulty": {
+                    "terms": (self.config.min_terms, self.config.max_terms),
+                },
             },
         }
 
@@ -103,13 +113,23 @@ In addition, When doing calculation, Use the following instructions together wit
                 # Check mathematical equivalence through simplification
                 if sympy.simplify(derivative - integrand) == 0:
                     reward = 1.0
-                elif answer.strip():
-                    reward = 0.05
-                else:
-                    reward = 0.01
             except:
-                reward = 0.01
+                reward = 0.0
         return reward
 
 
-register_dataset("simple_integration", SimpleIntegrationDataset, SimpleIntegrationConfig)
+class SimpleIntegrationCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(SimpleIntegrationCurriculum.__name__, SimpleIntegrationConfig)
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="terms",
+                levels=[2, 3, 4, 5],
+                lower_field_name="min_terms",
+                upper_field_name="max_terms",
+                description="The number of terms in the polynomial",
+            )
+        )
+
+
+register_dataset(DATASET_NAME, SimpleIntegrationDataset, SimpleIntegrationConfig, SimpleIntegrationCurriculum)

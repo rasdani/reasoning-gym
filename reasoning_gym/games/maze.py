@@ -3,7 +3,10 @@ import string
 from dataclasses import dataclass
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "maze"
 
 
 @dataclass
@@ -103,6 +106,8 @@ class MazeDataset(ProceduralDataset):
                     "question": question_str,
                     "answer": str(dist),
                     "metadata": {
+                        "source_dataset": DATASET_NAME,
+                        "source_index": idx,
                         "grid_size": size,
                         "grid": ["".join(row) for row in maze_grid],
                         "shortest_path_length": dist,
@@ -110,6 +115,10 @@ class MazeDataset(ProceduralDataset):
                         "goal": self.goal_char,
                         "wall": self.wall_char,
                         "path": self.path_char,
+                        "difficulty": {
+                            "dist": (self.config.min_dist, self.config.max_dist),
+                            "grid_size": (self.config.min_grid_size, self.config.max_grid_size),
+                        },
                     },
                 }
 
@@ -184,4 +193,29 @@ class MazeDataset(ProceduralDataset):
         return "\n".join("".join(row) for row in grid)
 
 
-register_dataset("maze", MazeDataset, MazeConfig)
+class MazeCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(MazeCurriculum.__name__, MazeConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="dist",
+                levels=[10, 25, 50, 100],
+                description="Distance from start to goal",
+                lower_field_name="min_dist",
+                upper_field_name="max_dist",
+                ensure_interval=True,
+            ),
+            RangeAttributeDefinition(
+                name="grid_size",
+                levels=[10, 25, 50, 100],
+                description="Size of the square grid",
+                lower_field_name="min_grid_size",
+                upper_field_name="max_grid_size",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, MazeDataset, MazeConfig, MazeCurriculum)

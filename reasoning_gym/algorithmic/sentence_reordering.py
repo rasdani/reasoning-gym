@@ -5,8 +5,11 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..data import read_data_file
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "sentence_reordering"
 
 
 @dataclass
@@ -89,7 +92,14 @@ class SentenceReorderingDataset(ProceduralDataset):
         return {
             "question": f"Restore the correct order of words in the following sentence: {question}",
             "answer": solved_sentence,
-            "metadata": {"word_count": word_count},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "word_count": word_count,
+                "difficulty": {
+                    "words_in_sentence": (self.config.min_words_in_sentence, self.config.max_words_in_sentence),
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
@@ -110,8 +120,25 @@ class SentenceReorderingDataset(ProceduralDataset):
                 else:
                     reward = 0.05
             except:
-                reward = 0.01
+                reward = 0.0
         return reward
 
 
-register_dataset("sentence_reordering", SentenceReorderingDataset, SentenceReorderingConfig)
+class SentenceReorderingCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(SentenceReorderingCurriculum.__name__, SentenceReorderingConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="words_in_sentence",
+                levels=[5, 20, 50, 100],
+                description="Number of words in the sentence",
+                lower_field_name="min_words_in_sentence",
+                upper_field_name="max_words_in_sentence",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, SentenceReorderingDataset, SentenceReorderingConfig, SentenceReorderingCurriculum)

@@ -6,7 +6,10 @@ from math import lcm
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "lcm"
 
 
 @dataclass
@@ -62,8 +65,41 @@ class LCMDataset(ProceduralDataset):
         return {
             "question": f"Find the Least Common Multiple (LCM) of these numbers: {numbers_str}",
             "answer": str(result),
-            "metadata": {"numbers": numbers, "result": result},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "numbers": numbers,
+                "result": result,
+                "difficulty": {
+                    "numbers": (self.config.min_numbers, self.config.max_numbers),
+                    "value": (self.config.min_value, self.config.max_value),
+                },
+            },
         }
 
 
-register_dataset("lcm", LCMDataset, LCMConfig)
+class LCMCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(LCMCurriculum.__name__, LCMConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="numbers",
+                levels=[2, 4, 6, 8, 10],
+                description="Number of integers to find LCM of",
+                lower_field_name="min_numbers",
+                upper_field_name="max_numbers",
+            ),
+            RangeAttributeDefinition(
+                name="value",
+                levels=[1, 100, 500, 1000, 5000],
+                description="Range of values for each integer",
+                lower_field_name="min_value",
+                upper_field_name="max_value",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, LCMDataset, LCMConfig, LCMCurriculum)

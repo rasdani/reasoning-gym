@@ -2,7 +2,10 @@ import random
 from dataclasses import dataclass
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "simple_geometry"
 
 
 @dataclass
@@ -108,12 +111,17 @@ class SimpleGeometryDataset(ProceduralDataset):
             "question": prompt,
             "answer": answer_str,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "n_sides": n_sides,
                 "known_angles": known_angles,
                 "sum_of_known_angles": sum(known_angles),
                 "missing_angle_raw": missing_angle,
                 "missing_angle_rounded": missing_angle_rounded,
                 "total_interior_sum": total_sum,
+                "difficulty": {
+                    "sides": (self.config.min_sides, self.config.max_sides),
+                },
             },
         }
 
@@ -142,5 +150,22 @@ class SimpleGeometryDataset(ProceduralDataset):
         )
 
 
+class SimpleGeometryCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(SimpleGeometryCurriculum.__name__, SimpleGeometryConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="sides",
+                levels=[5, 10, 25, 50],
+                description="Number of sides in the polygon.",
+                lower_field_name="min_sides",
+                upper_field_name="max_sides",
+                ensure_interval=True,
+            )
+        )
+
+
 # Register the dataset so it can be accessed similarly to the others
-register_dataset("simple_geometry", SimpleGeometryDataset, SimpleGeometryConfig)
+register_dataset(DATASET_NAME, SimpleGeometryDataset, SimpleGeometryConfig, SimpleGeometryCurriculum)

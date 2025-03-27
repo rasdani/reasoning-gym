@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 VERT = "│"
@@ -11,6 +12,8 @@ LUP = "┘"
 LDOWN = "┐"
 RUP = "└"
 RDOWN = "┌"
+
+DATASET_NAME = "circuit_logic"
 
 
 def _repeat(s: str, n: int) -> str:
@@ -60,7 +63,8 @@ class CircuitLogicConfig:
     :param seed: Random seed
     """
 
-    num_terms: int = 5
+    min_terms: int = 3
+    max_terms: int = 5
     min_inputs: int = 2
     max_inputs: int = 4
     neg_prob: float = 0.3
@@ -70,7 +74,7 @@ class CircuitLogicConfig:
 
     def validate(self):
         assert 1 <= self.min_inputs <= self.max_inputs, "Invalid input range"
-        assert 1 <= self.num_terms, "Invalid number of terms"
+        assert 1 <= self.min_terms <= self.max_terms, "Invalid number of terms"
         assert 0.0 <= self.neg_prob <= 1.0, "neg_prob must be between 0 and 1"
 
 
@@ -112,28 +116,15 @@ class CircuitLogicDataset(ProceduralDataset):
             ("AND", "&"),
         ]
 
-    def __len__(self) -> int:
-        return self.config.size
-
-    def __iter__(self):
-        self._current_idx = 0
-        return self
-
-    def __next__(self) -> dict[str, Any]:
-        if self._current_idx >= self.config.size:
-            raise StopIteration
-        item = self[self._current_idx]
-        self._current_idx += 1
-        return item
-
     def __getitem__(self, idx: int) -> dict[str, Any]:
         """
         Generate one random circuit logic item using ASCII drawing.
         """
         rng = Random(self.seed + idx if self.seed is not None else None)
+        num_terms = rng.randint(self.config.min_terms, self.config.max_terms)
         return self._generate_circuit(
             rng=rng,
-            num_terms=self.config.num_terms,
+            num_terms=num_terms,
             min_inputs=self.config.min_inputs,
             max_inputs=self.config.max_inputs,
             neg_prob=self.config.neg_prob,
@@ -392,25 +383,54 @@ class CircuitLogicDataset(ProceduralDataset):
             "question": question_str,
             "answer": answer_str,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "expression": expression_for_display,
                 "assignments": assignments,
                 "term_strings": term_strings,
                 "final_gate": final_gate_name,
                 "inputs": inputs_list,
+                "difficulty": {
+                    "terms": (self.config.min_terms, self.config.max_terms),
+                    "inputs": (self.config.min_inputs, self.config.max_inputs),
+                },
             },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
-        if answer is None or len(answer) == 0:
-            return 0.0
+        if isinstance(answer, str) and len(answer) > 0:
+            oracle_answer = entry["answer"]
+            if oracle_answer == answer:
+                return 1.0
+            elif oracle_answer == answer.strip():
+                return len(oracle_answer) / len(answer)
 
-        oracle_answer = entry["answer"]
-        if oracle_answer == answer:
-            return 1.0
-        elif oracle_answer == answer.strip():
-            return len(oracle_answer) / len(answer)
-
-        return 0.01
+        return 0.0
 
 
-register_dataset("circuit_logic", CircuitLogicDataset, CircuitLogicConfig)
+class CircuitLogicCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(CircuitLogicCurriculum.__name__, CircuitLogicConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="terms",
+                levels=[3, 5, 10, 20, 30],
+                description="Number of terms in the expression",
+                lower_field_name="min_terms",
+                upper_field_name="max_terms",
+                ensure_interval=True,
+            ),
+            RangeAttributeDefinition(
+                name="inputs",
+                levels=[2, 4, 6, 8, 10],
+                description="Number of inputs per term",
+                lower_field_name="min_inputs",
+                upper_field_name="max_inputs",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, CircuitLogicDataset, CircuitLogicConfig, CircuitLogicCurriculum)

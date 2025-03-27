@@ -1,7 +1,14 @@
 import pytest
 
 from reasoning_gym import create_dataset
-from reasoning_gym.cognition.color_cube_rotation import Color, ColorCubeRotationDataset, Cube, Side
+from reasoning_gym.cognition.color_cube_rotation import (
+    Color,
+    ColorCubeRotationConfig,
+    ColorCubeRotationCurriculum,
+    ColorCubeRotationDataset,
+    Cube,
+    Side,
+)
 
 
 def test_color_cube_rotation_generation():
@@ -49,6 +56,16 @@ def test_deterministic_generation():
         assert dataset1[i]["question"] == dataset2[i]["question"]
         assert dataset1[i]["answer"] == dataset2[i]["answer"]
 
+    for item in dataset1:
+        assert isinstance(item, dict)
+        assert "question" in item
+        assert "answer" in item
+        assert "metadata" in item
+
+        # Test the scoring
+        assert dataset1.score_answer(answer=item["answer"], entry=item) == 1.0
+        assert dataset1.score_answer(answer=None, entry=item) == 0.0
+
 
 def test_cube_rotations():
     # Test individual rotation operations
@@ -72,3 +89,24 @@ def test_cube_rotations():
     assert cube.colors[Side.BACK] == original[Side.TOP]
     assert cube.colors[Side.RIGHT] == original[Side.RIGHT]  # Unchanged
     assert cube.colors[Side.LEFT] == original[Side.LEFT]  # Unchanged
+
+
+def test_shortest_path_curriculum():
+    curriculum = ColorCubeRotationCurriculum()
+
+    base_value = {"size": 150, "seed": 1}
+
+    base_cfg: ColorCubeRotationConfig = curriculum.generate_configuration(base_value)
+    assert base_cfg.seed == 1
+    assert base_cfg.size == 150
+    assert base_cfg.min_rotations == 1 and base_cfg.max_rotations == 5
+
+    # test incrementing attribute levels
+    curriculum.increment_attr_level("rotations")
+    increased_cfg = curriculum.generate_configuration(base_value)
+    assert increased_cfg.min_rotations == 1 and increased_cfg.max_rotations == 10
+
+    # test decrementing attribute level
+    curriculum.decrement_attr_level("rotations")
+    partially_decreased_cfg = curriculum.generate_configuration(base_value)
+    assert partially_decreased_cfg.min_rotations == 1 and partially_decreased_cfg.max_rotations == 5

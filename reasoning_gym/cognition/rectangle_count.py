@@ -2,43 +2,20 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Your task is to count how many rectangles are present in an ASCII grid.
 
 Single rectangles are outlined with a '#', overlapping rectangles (max 2) are shown with '█'.
 
-Example:
-- Input: How many rectangles are in the grid below?
-
-              ####
-              #  #
-              ####
-
-
-
-
-
-
-
-
-
-
- #########
- #       █##
- #       █ #
- ########█ #
-         # #
-         ###
-- Output: 3
-- Explanation:
-    - The first rectangle is the 3x4 rectangle in the top right.
-    - The other two rectangles are overlapping in the bottom left corner.
-    - Therefore, the final answer is 3.
+Your output should be a single number, representing the total count of rectangles.
 
 Now, it's your turn. How many rectangles do you see in the grid below?
 {puzzle}
 """
+
+DATASET_NAME = "rectangle_count"
 
 
 def draw_rectangles_with_overlap(n, width, height, rng):
@@ -142,7 +119,16 @@ class RectangleCountDataset(ProceduralDataset):
         return {
             "question": QUESTION_TEMPLATE.format(puzzle=puzzle),
             "answer": str(answer),
-            "metadata": {"puzzle": puzzle, "solution": answer},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "puzzle": puzzle,
+                "solution": answer,
+                "num_rectangles": target,
+                "difficulty": {
+                    "max_rectangles": self.config.max_rectangles,
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
@@ -158,12 +144,25 @@ class RectangleCountDataset(ProceduralDataset):
             float: The computed score between 0.0 and 1.0.
         """
 
-        if answer == None:
-            return 0.0
-        if answer.lower().replace("\n", "") != entry["answer"].lower().replace("\n", ""):
-            return 0.01
-        else:
-            return 1.0  # Yay
+        if isinstance(answer, str):
+            if answer.lower().replace("\n", "") == entry["answer"].lower().replace("\n", ""):
+                return 1.0  # Yay
+        return 0.0
 
 
-register_dataset("rectangle_count", RectangleCountDataset, RectangleCountConfig)
+class RectangleCountCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(RectangleCountCurriculum.__name__, RectangleCountConfig)
+
+        # Define attributes
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="max_rectangles",
+                levels=[1, 3, 5, 10],
+                description="Number of rectangles in the grid",
+                field_name="max_rectangles",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, RectangleCountDataset, RectangleCountConfig, RectangleCountCurriculum)

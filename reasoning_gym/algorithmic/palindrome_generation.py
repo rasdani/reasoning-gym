@@ -3,6 +3,7 @@ import string
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPALTE = """Your task is, given a list of letters, to form a valid palindrome.
@@ -11,16 +12,13 @@ A palindrome is a phrase that reads the same forwards and backwards.
 
 If there are multiple possible answers, only respond with one of them. You must use all the letters provided.
 
-Example:
-- Input: Form a valid palindrome using the following letters: a, a, b
-- Output: aba
-- Explanation:
-    - The phrase aba reads the same forwards and backwards.
-    - The output answer is a valid palindrome using all the letters provided.
-    - The answer is a string, rather than a list of characters.
+Your output should be a single string, with no spaces or punctuation.
 
 Now, form a valid palindrome using the following letters: {letters}
 """
+
+
+DATASET_NAME = "palindrome_generation"
 
 
 @dataclass
@@ -72,8 +70,14 @@ class PalindromeDataset(ProceduralDataset):
             "question": QUESTION_TEMPALTE.format(letters=", ".join(scrambled_letters)),
             "answer": palindrome,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "letters": scrambled_letters,
                 "generated_palindrome": palindrome,
+                "length": length,
+                "difficulty": {
+                    "length": (self.config.min_length, self.config.max_length),
+                },
             },
         }
 
@@ -98,14 +102,14 @@ class PalindromeDataset(ProceduralDataset):
         - Correct answer (palindrome with only correct letters in the correct quantities) gives 1.0
         - An answer that is a palindrome, but not with the same letters as provided, gives 0.05
         - An answer that is a string, but not a palindrome gives 0.02
-        - An empty string gives 0.01.
+        - An empty string gives 0.0
         - None gives 0.0.
         """
         if answer is None or not isinstance(answer, str):
             return 0.0  # No answer given
 
         if answer == "":
-            return 0.01
+            return 0.0
 
         metadata = entry["metadata"]
         answer = answer.strip().lower()
@@ -122,4 +126,21 @@ class PalindromeDataset(ProceduralDataset):
         return 1.0  # Correct solution
 
 
-register_dataset("palindrome", PalindromeDataset, PalindromeConfig)
+class PalindromeCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(PalindromeCurriculum.__name__, PalindromeConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="length",
+                levels=[10, 50, 100, 500],
+                description="Length of the generated palindrome.",
+                lower_field_name="min_length",
+                upper_field_name="max_length",
+                ensure_interval=True,
+            )
+        )
+
+
+register_dataset(DATASET_NAME, PalindromeDataset, PalindromeConfig, PalindromeCurriculum)

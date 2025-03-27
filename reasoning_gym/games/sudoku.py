@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "sudoku"
 
 
 @dataclass
@@ -210,11 +213,20 @@ class SudokuDataset(ProceduralDataset):
         return {
             "question": question,
             "answer": solution_str,
-            "metadata": {"puzzle": puzzle, "solution": solved_board, "num_empty": num_empty},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "puzzle": puzzle,
+                "solution": solved_board,
+                "num_empty": num_empty,
+                "difficulty": {
+                    "empty": (self.config.min_empty, self.config.max_empty),
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
-        if not answer:
+        if not isinstance(answer, str) or len(answer) == 0:
             return 0.0
 
         oracle_answer = entry["answer"]
@@ -251,4 +263,21 @@ class SudokuDataset(ProceduralDataset):
         return reward
 
 
-register_dataset("sudoku", SudokuDataset, SudokuConfig)
+class SudokuCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(SudokuCurriculum.__name__, SudokuConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="empty",
+                levels=[20, 30, 40, 50],
+                description="Number of empty cells in the puzzle",
+                lower_field_name="min_empty",
+                upper_field_name="max_empty",
+                ensure_interval=True,
+            )
+        )
+
+
+register_dataset(DATASET_NAME, SudokuDataset, SudokuConfig, SudokuCurriculum)

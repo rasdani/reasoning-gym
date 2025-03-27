@@ -6,14 +6,18 @@ from typing import Any, Optional
 from magiccube.cube import Cube, CubeMove, CubeMoveType
 from magiccube.solver.basic.basic_solver import BasicSolver
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "rubiks_cube"
 
 
 @dataclass
 class RubiksCubeConfig:
     """Configuration for RubiksCube task generation"""
 
-    scramble_steps: int = 3  # Number of random steps from initial state
+    min_scramble_steps: int = 3  # Minimum number of random steps from initial state
+    max_scramble_steps: int = 10  # Maximum number of random steps from initial state
     cube_size: int = 3  # Default to a standard 3x3x3 cube
     remove_ansi: bool = True
     seed: Optional[int] = None
@@ -23,7 +27,10 @@ class RubiksCubeConfig:
         """Validate configuration parameters"""
         assert self.cube_size > 1, "cube_size must be greater than 1"
         assert self.cube_size < 7, "cube_size must be less than 7"
-        assert self.scramble_steps > 0, "scramble_steps must be greater than 0"
+        assert self.min_scramble_steps > 0, "min_scramble_steps must be greater than 0"
+        assert (
+            self.max_scramble_steps >= self.min_scramble_steps
+        ), "max_scramble_steps must be greater than min_scramble_steps"
 
 
 class RubiksCubeDataset(ProceduralDataset):
@@ -31,8 +38,8 @@ class RubiksCubeDataset(ProceduralDataset):
 
     def __init__(self, config: RubiksCubeConfig):
         self._prompt_templates = [
-            "You are given a {cube_size}x{cube_size}x{cube_size} Rubik's cube. It looks like this:\n\n{cube_render} \n\nPlease provide a solution to solve this cube using Singmaster notation.",
-            "You see a size {cube_size} Rubik's cube. It is arranged this:\n\n{cube_render} \n\nPlease provide a solution to solve this cube.",
+            "You are given a {cube_size}x{cube_size}x{cube_size} Rubik's cube. It looks like this:\n\n{cube_render} \n\nPlease provide a solution to solve this cube using Singmaster notation. Do not combine any steps, for instance, do not write 'U2', and instead write 'U U'.",
+            "You see a size {cube_size} Rubik's cube. It is arranged this:\n\n{cube_render} \n\nPlease provide a solution to solve this cube using Singmaster notation. Do not combine any steps, for instance, do not write 'U2', and instead write 'U U'.",
         ]
         super().__init__(config=config, seed=config.seed, size=config.size)
 
@@ -77,7 +84,8 @@ class RubiksCubeDataset(ProceduralDataset):
         rng = Random(self.seed + idx)
 
         cube = Cube(self.config.cube_size)
-        scramble_moves = self._generate_random_moves(rng, cube, num_steps=self.config.scramble_steps)
+        num_steps = rng.randint(self.config.min_scramble_steps, self.config.max_scramble_steps)
+        scramble_moves = self._generate_random_moves(rng, cube, num_steps=num_steps)
         cube.rotate(scramble_moves)
 
         # render cube
@@ -99,10 +107,16 @@ class RubiksCubeDataset(ProceduralDataset):
             ),
             "answer": None,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "cube_size": self.config.cube_size,
-                "scramble_steps": self.config.scramble_steps,
+                "scramble_steps": num_steps,
                 "scramble_moves": " ".join([str(move) for move in scramble_moves]),
                 "example_correct_answer": actions_string,
+                "difficulty": {
+                    "cube_size": self.config.cube_size,
+                    "scramble_steps": (self.config.min_scramble_steps, self.config.max_scramble_steps),
+                },
             },
         }
 
@@ -116,7 +130,8 @@ class RubiksCubeDataset(ProceduralDataset):
 
             # Test the solution
             try:
-                eval_cube.rotate(answer)
+                expanded_answer = self.expand_moves(answer)
+                eval_cube.rotate(expanded_answer)
                 solved = eval_cube.is_done()
 
                 if solved:
@@ -135,6 +150,46 @@ class RubiksCubeDataset(ProceduralDataset):
         ansi_escape = re.compile(r"(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]")
         return ansi_escape.sub("", line)
 
+    def expand_moves(self, move_str):
+        try:
+            moves = move_str.split()
+            expanded = []
+            for move in moves:
+                # Split the move into the base part and any trailing digits
+                match = re.fullmatch(r"^([^\d]*)(\d*)$", move)
+                if match:
+                    base, num_part = match.groups()
+                    if num_part:
+                        expanded.extend([base] * int(num_part))
+                    else:
+                        expanded.append(base)
+            return " ".join(expanded).strip()
+        except Exception as e:
+            return move_str
+
+
+class RubiksCubeCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(RubiksCubeCurriculum.__name__, RubiksCubeConfig)
+
+        # Define attributes
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="cube_size",
+                field_name="cube_size",
+                levels=[3, 4, 5, 6, 7],
+                description="Board size",
+            ),
+            RangeAttributeDefinition(
+                name="scramble_steps",
+                levels=[3, 10, 50, 100, 500, 1000],
+                description="Number of random moves to scramble the cube",
+                lower_field_name="min_scramble_steps",
+                upper_field_name="max_scramble_steps",
+                ensure_interval=True,
+            ),
+        )
+
 
 # Register the dataset
-register_dataset("rubiks_cube", RubiksCubeDataset, RubiksCubeConfig)
+register_dataset(DATASET_NAME, RubiksCubeDataset, RubiksCubeConfig, RubiksCubeCurriculum)

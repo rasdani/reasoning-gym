@@ -5,12 +5,16 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..data import get_data_file_path
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Transform the word ladder '{start}' to '{end}' by changing one letter at a time.
 Provide your answer as a comma-separated sequence of uppercase letters without spaces.
 Each step must be a valid English word."""
+
+
+DATASET_NAME = "word_ladder"
 
 
 @dataclass
@@ -217,12 +221,22 @@ class WordLadderDataset(ProceduralDataset):
         return {
             "question": QUESTION_TEMPLATE.format(start=start, end=end),
             "answer": ",".join(path),
-            "metadata": {"start_word": start, "end_word": end, "word_length": length, "chain_length": len(path)},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "start_word": start,
+                "end_word": end,
+                "word_length": length,
+                "chain_length": len(path),
+                "difficulty": {
+                    "word_length": (self.config.min_word_length, self.config.max_word_length),
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
-        if answer is None:
-            return 0
+        if not isinstance(answer, str):
+            return 0.0
 
         answer_words = tuple(s.strip() for s in answer.upper().split(","))
 
@@ -239,17 +253,17 @@ class WordLadderDataset(ProceduralDataset):
         # 4. all words are in our vocabulary
 
         if len(answer_words) < 2:
-            return 0
+            return 0.0
 
         if answer_words[0] != start_word or answer_words[-1] != end_word:
-            return 0.01
+            return 0.0
 
         if not all(len(w) == word_length for w in answer_words):
-            return 0.01
+            return 0.0
 
         for i in range(1, len(answer_words)):
             if sum(1 for a, b in zip(answer_words[i - 1], answer_words[i]) if a != b) != 1:
-                return 0.01
+                return 0.0
 
         reward = 1.0
         for word in answer_words:
@@ -259,4 +273,21 @@ class WordLadderDataset(ProceduralDataset):
         return reward
 
 
-register_dataset("word_ladder", WordLadderDataset, WordLadderConfig)
+class WordLadderCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(WordLadderCurriculum.__name__, WordLadderConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="word_length",
+                levels=[3, 4, 5, 6],
+                description="Length of words in the puzzle",
+                lower_field_name="min_word_length",
+                upper_field_name="max_word_length",
+                ensure_interval=True,
+            )
+        )
+
+
+register_dataset(DATASET_NAME, WordLadderDataset, WordLadderConfig, WordLadderCurriculum)

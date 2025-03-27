@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 MIN_BOARD_SIZE = 4
@@ -20,24 +21,13 @@ No two queens attack each other if they are not in the same row, column, or diag
 
 You can place a queen by replacing an underscore (_) with a Q.
 
-Example:
-- Input: Given the below board of size 4 x 4 your job is to place 2 queen(s) on the board such that no two queens attack each other.
-_ Q _ _
-_ _ _ _
-_ _ _ _
-_ _ Q _
-- Output:
-_ Q _ _
-_ _ _ Q
-Q _ _ _
-_ _ Q _
-- Explanation
-    - None of the queens attack each other vertically, horizontally, or diagonally.
-    - The added queens are marked with Q at the positions (1, 3) and (2, 0).
+Your output should be also a board in the same format as the input, with queens placed on the board by replacing underscores with the letter Q.
 
 Given the below board of size {n} x {n} your job is to place {num_removed} queen(s) on the board such that no two queens attack each other.
 {puzzle}
 """
+
+DATASET_NAME = "n_queens"
 
 
 @dataclass
@@ -143,16 +133,22 @@ class NQueensDataset(ProceduralDataset):
             "question": QUESTION_TEMPLATE.format(puzzle=puzzle_str, n=len(puzzle), num_removed=num_removed),
             "answer": rng.choice(valid_solutions_str),  # choose arbitary answer (e.g. for SFT)
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "puzzle": puzzle,
                 "solutions": valid_solutions,
                 "num_removed": num_removed,
                 "valid_answers": valid_solutions_str,
+                "difficulty": {
+                    "n": self.config.n,
+                    "num_removed": (self.config.min_remove, self.config.max_remove),
+                },
             },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
-        valid_solutions = entry["metadata"]["valid_answers"]
-        if answer is not None:
+        if isinstance(answer, str):
+            valid_solutions = entry["metadata"]["valid_answers"]
             if answer in valid_solutions:
                 return 1.0
             try:
@@ -160,8 +156,29 @@ class NQueensDataset(ProceduralDataset):
                 if answer in valid_solutions:
                     return 0.5
             except Exception as e:
-                return 0.01
+                pass
         return 0.0
 
 
-register_dataset("n_queens", NQueensDataset, NQueensConfig)
+class NQueensCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(NQueensCurriculum.__name__, NQueensConfig)
+
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="n",
+                field_name="n",
+                levels=[4, 6, 8, 12],
+                description="Board size",
+            ),
+            RangeAttributeDefinition(
+                name="num_removed",
+                levels=[2, 4, 6, 10],
+                description="Number of queens to remove",
+                lower_field_name="min_remove",
+                upper_field_name="max_remove",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, NQueensDataset, NQueensConfig, NQueensCurriculum)

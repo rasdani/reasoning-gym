@@ -1,10 +1,12 @@
 import random
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
-from ..coaching import AttributeType, BaseCurriculum, RangeAttributeDefinition
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "decimal_chain_sum"
 
 
 @dataclass
@@ -66,11 +68,16 @@ class DecimalChainSumDataset(ProceduralDataset):
             "question": f"State the final answer to the following arithmetic problem: {expression} =",
             "answer": str(result),
             "metadata": {
-                "difficulty": {
-                    "num_terms": num_terms,
-                    "num_digits": num_digits,
-                },
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "num_terms": num_terms,
+                "num_digits": num_digits,
                 "expression": expression,
+                "difficulty": {
+                    "num_terms": (self.config.min_terms, self.config.max_terms),
+                    "num_digits": (self.config.min_digits, self.config.max_digits),
+                    "decimal_places": (self.config.min_decimal_places, self.config.max_decimal_places),
+                },
             },
         }
 
@@ -130,7 +137,11 @@ class DecimalChainSumDataset(ProceduralDataset):
                 result -= c
 
         expression = " ".join(expression_parts)
-        result = result.quantize(Decimal(f"0.{'0' * max(decimal_places)}"))
+        try:
+            q = Decimal(f"0.{'0' * max(decimal_places)}")
+            result = result.quantize(q)
+        except InvalidOperation:
+            pass
         return expression, result
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
@@ -142,16 +153,50 @@ class DecimalChainSumDataset(ProceduralDataset):
         Returns:
             1.0 for exact numerical match, 0.01 otherwise
         """
-        if answer is None or len(answer.strip()) == 0:
+        if not isinstance(answer, str) or len(answer.strip()) == 0:
             return 0.0
 
         try:
             student_answer = Decimal(answer.strip())
             oracle_answer = Decimal(entry["answer"])
 
-            return 1.0 if student_answer == oracle_answer else 0.01
-        except (ValueError, TypeError, ArithmeticError):
-            return 0.01
+            if student_answer == oracle_answer:
+                return 1.0
+        except Exception:
+            pass
+
+        return 0.0
 
 
-register_dataset("decimal_chain_sum", DecimalChainSumDataset, DecimalChainSumConfig)
+class DecimalChainSumCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(DecimalChainSumCurriculum.__name__, DecimalChainSumConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="num_terms",
+                levels=[2, 3, 4, 5],
+                description="Maximum number of terms in the expression",
+                lower_field_name="min_terms",
+                upper_field_name="max_terms",
+            ),
+            RangeAttributeDefinition(
+                name="num_digits",
+                levels=[1, 2, 4, 10],
+                default_level=0,  # Start with 1-digit numbers
+                description="Number of digits in each operand",
+                lower_field_name="min_digits",
+                upper_field_name="max_digits",
+            ),
+            RangeAttributeDefinition(
+                name="decimal_places",
+                levels=[1, 2, 3, 4],
+                description="Number of decimal places in each operand",
+                lower_field_name="min_decimal_places",
+                upper_field_name="max_decimal_places",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, DecimalChainSumDataset, DecimalChainSumConfig, DecimalChainSumCurriculum)

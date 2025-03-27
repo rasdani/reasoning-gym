@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "quantum_lock"
 
 
 @dataclass
@@ -47,19 +50,22 @@ Buttons:
                 - metadata: dict with generation parameters
         """
         rng = Random(self.seed + idx)
+        difficulty = rng.randint(1, self.config.difficulty)
 
-        puzzle_data = self.generate_quantum_puzzle(rng, self.config.difficulty)
+        puzzle_data = self.generate_quantum_puzzle(rng, difficulty)
 
         return {
             "question": self.format_puzzle(rng.choice(self._prompt_templates), puzzle=puzzle_data),
             "answer": " → ".join(puzzle_data["solution"]),
             "metadata": {
-                "difficulty": self.config.difficulty,
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "solution_path": puzzle_data["solution"],
                 "target_value": puzzle_data["target_value"],
                 "buttons": puzzle_data["buttons"],
                 "initial_state": puzzle_data["initial_state"],
                 "initial_value": puzzle_data["initial_value"],
+                "difficulty": {"difficulty": difficulty},
             },
         }
 
@@ -169,21 +175,15 @@ Buttons:
 
         The function awards 1.0 for a correct answer and less otherwise.
         """
-        if answer == None:
+        if not isinstance(answer, str):
             return 0.0
 
-        # Get correct solution from metadata
-        correct_solution = entry["metadata"].get("solution_path", [])
-
         # Normalize both answers
-        def normalize_seq(seq):
-            """Handle both string and list inputs by converting to string first"""
-            # Convert sequence to string representation if it's a list
-            input_str = "".join(seq) if isinstance(seq, list) else str(seq or "")
-            return [c.upper() for c in re.findall(r"[A-C]", input_str.upper())]
+        def normalize_seq(seq: str) -> list[str]:
+            return [c.upper() for c in re.findall(r"[A-C]", seq.upper())]
 
         user_sequence = normalize_seq(answer)
-        target_sequence = normalize_seq("".join(correct_solution))
+        target_sequence = normalize_seq(entry["answer"])
 
         # Exact sequence match required
         if user_sequence == target_sequence:
@@ -192,9 +192,11 @@ Buttons:
         # Partial credit for reaching target (optional)
         final_state = self.simulate_sequence(entry["metadata"], user_sequence)
         if final_state == entry["metadata"]["target_value"]:
-            return 0.5  # Alternative scoring option
+            if len(user_sequence) == len(target_sequence):
+                return 1.0  # Different answer, but qually correct
+            return 0.5  # Alternative scoring - you're correct, but not optimal
 
-        return 0.1
+        return 0.0
 
     def simulate_sequence(self, metadata: dict, sequence: list[str]) -> int:
         """Simulate button presses to verify solutions"""
@@ -237,5 +239,18 @@ Buttons:
         )
 
 
+class QuantumLockCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(QuantumLockCurriculum.__name__, QuantumLockConfig)
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="difficulty",
+                field_name="difficulty",
+                levels=list(range(1, 11)),
+                description="The difficulty of the puzzle",
+            )
+        )
+
+
 # Register the dataset
-register_dataset("quantum_lock", QuantumLockDataset, QuantumLockConfig)
+register_dataset(DATASET_NAME, QuantumLockDataset, QuantumLockConfig, QuantumLockCurriculum)

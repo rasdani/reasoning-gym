@@ -35,6 +35,8 @@ Answer Format:
   Example: ["w,A1,B3"] means white knight moves A1→B3
 """
 
+DATASET_NAME = "knight_swap"
+
 
 @dataclass
 class KnightSwapConfig:
@@ -286,6 +288,8 @@ class KnightSwapDataset(ProceduralDataset):
                                 "question": QUESTION_TEMPLATE.format(board=board_str, start_turn=start_turn),
                                 "answer": solution_str,
                                 "metadata": {
+                                    "source_dataset": DATASET_NAME,
+                                    "source_index": idx,
                                     "board": board_copy,
                                     "pieces": pieces,
                                     "start_turn": start_turn,
@@ -314,36 +318,35 @@ class KnightSwapDataset(ProceduralDataset):
         - 1.0 for correct answer (either "No" for impossible puzzles or valid solution of optimal length)
         - A proportional score for correct but longer solutions
         - 0.05 for valid moves that don't solve the puzzle
-        - 0.01 for invalid format
-        - 0.0 for None
+        - 0.0 for invalid format or None
         """
-        if answer is None:
+        if not isinstance(answer, str):
             return 0.0
 
         answer = answer.strip()
-        if not answer:
-            return 0.01
+        if len(answer) == 0:
+            return 0.0
 
         # Handle impossible puzzles
         if not entry["metadata"]["is_possible"]:
-            return 1.0 if answer.lower() == "no" else 0.01
+            return 1.0 if answer.lower() == "no" else 0.0
 
         # Handle "No" answer for possible puzzles
         if answer.lower() == "no":
-            return 0.01
+            return 0.0
 
         try:
             # Parse moves from JSON list
             move_list = json.loads(answer)
             if not isinstance(move_list, list):
-                return 0.01
+                return 0.0
 
             # Parse moves
             moves = []
             for move_str in move_list:
                 color, start, end = move_str.split(",")
                 if color not in ("w", "B"):
-                    return 0.01
+                    return 0.0
                 moves.append((color, start, end))
 
             # Validate and apply moves
@@ -357,13 +360,13 @@ class KnightSwapDataset(ProceduralDataset):
 
             for color, start, end in moves:
                 if color != current_turn:
-                    return 0.01
+                    return 0.0
                 if start not in pieces or pieces[start] != color:
-                    return 0.01
+                    return 0.0
                 if end not in board[start]:
-                    return 0.01
+                    return 0.0
                 if end in pieces and pieces[end] is not None:
-                    return 0.01
+                    return 0.0
 
                 # Apply move
                 pieces[end] = pieces[start]
@@ -390,7 +393,7 @@ class KnightSwapDataset(ProceduralDataset):
             return 0.05
 
         except Exception:
-            return 0.01
+            return 0.0
 
 
-register_dataset("knight_swap", KnightSwapDataset, KnightSwapConfig)
+register_dataset(DATASET_NAME, KnightSwapDataset, KnightSwapConfig)

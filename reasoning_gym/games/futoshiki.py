@@ -6,22 +6,27 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "futoshiki"
 
 
 @dataclass
 class FutoshikiConfig:
     """Configuration for Futoshiki puzzle generation"""
 
-    board_size: int = 4  # Board will be NxN where N is this value
-    difficulty: int = 1  # Possible values: 0, 1, 2, 3
+    min_board_size: int = 4  # Board will be NxN where N is this value
+    max_board_size: int = 9
+    min_difficulty: int = 0
+    max_difficulty: int = 3
     seed: Optional[int] = None
     size: int = 500  # Virtual dataset size
 
     def validate(self):
         """Validate configuration parameters"""
-        assert 4 <= self.board_size <= 9, "board_size must be between 4 and 9"
-        assert 0 <= self.difficulty <= 3, "difficulty must be between 0 and 3"
+        assert 4 <= self.min_board_size <= self.max_board_size, "board_size must be between 4 and 9"
+        assert 0 <= self.min_difficulty <= self.max_difficulty, "difficulty must be between 0 and 3"
 
 
 class FutoshikiDataset(ProceduralDataset):
@@ -52,11 +57,13 @@ class FutoshikiDataset(ProceduralDataset):
         Difficulty in [0..3] affects number of clues and constraints.
         """
         rng = Random(self.seed + idx)
+        board_size = rng.randint(self.config.min_board_size, self.config.max_board_size)
+        difficulty = rng.randint(self.config.min_difficulty, self.config.max_difficulty)
 
         # Generate random "solved" Futoshiki grid
-        solution = self._generate_random_solution(self.config.board_size, rng)
+        solution = self._generate_random_solution(board_size, rng)
         # Add random adjacency constraints consistent with generated solved grid
-        constraints = self._generate_random_constraints(solution, self.config.difficulty, rng)
+        constraints = self._generate_random_constraints(solution, difficulty, rng)
         # Starting with full solution, remove clues to desired difficulty
         puzzle = self._remove_clues(copy.deepcopy(solution), constraints, rng)
 
@@ -65,22 +72,28 @@ class FutoshikiDataset(ProceduralDataset):
         solution_str = self._puzzle_to_string(solution, constraints)
 
         question = (
-            f"Solve the following {self.config.board_size}x{self.config.board_size} Futoshiki puzzle:\n\n"
+            f"Solve the following {board_size}x{board_size} Futoshiki puzzle:\n\n"
             f"{puzzle_str}\n\n"
             "Ensure your answer follows the same format as the puzzle above, just replace blanks (_) with the correct value for the cell.\n"
             "Use < and > for horizontal constraints. Use \u2227 and \u2228 for vertical constraints.\n"
-            f"Remember, in Futoshiki each row and column must contain each number from 1 to {self.config.board_size} exactly once."
+            f"Remember, in Futoshiki each row and column must contain each number from 1 to {board_size} exactly once."
         )
 
         return {
             "question": question,
             "answer": solution_str,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "puzzle": puzzle,
                 "constraints": constraints,
                 "solution": solution,
-                "board_size": self.config.board_size,
-                "difficulty": self.config.difficulty,
+                "board_size": board_size,
+                "difficulty_rating": difficulty,
+                "difficulty": {
+                    "board_size": (self.config.min_board_size, self.config.max_board_size),
+                    "difficulty": (self.config.min_difficulty, self.config.max_difficulty),
+                },
             },
         }
 
@@ -618,7 +631,7 @@ class FutoshikiDataset(ProceduralDataset):
         return grid
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
-        if not answer:
+        if not isinstance(answer, str):
             return 0.0
 
         oracle_answer = entry["answer"]
@@ -655,4 +668,26 @@ class FutoshikiDataset(ProceduralDataset):
         return reward
 
 
-register_dataset("futoshiki", FutoshikiDataset, FutoshikiConfig)
+class FutoshikiCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(FutoshikiCurriculum.__name__, FutoshikiConfig)
+
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="board_size",
+                levels=[4, 6, 7, 9],
+                description="Board size",
+                lower_field_name="min_board_size",
+                upper_field_name="max_board_size",
+            ),
+            RangeAttributeDefinition(
+                name="difficulty",
+                levels=[0, 1, 2, 3],
+                description="Difficulty",
+                lower_field_name="min_difficulty",
+                upper_field_name="max_difficulty",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, FutoshikiDataset, FutoshikiConfig)

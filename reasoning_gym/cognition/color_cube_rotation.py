@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 
@@ -32,6 +33,9 @@ class Side(StrEnum):
     LEFT = "left"
     BACK = "back"
     BOTTOM = "bottom"
+
+
+DATASET_NAME = "color_cube_rotation"
 
 
 @dataclass
@@ -136,10 +140,15 @@ class ColorCubeRotationDataset(ProceduralDataset):
             "question": story,
             "answer": cube.colors[target_side],
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "initial_state": {k.value: v.value for k, v in initial_state.items()},
                 "rotations": [r.value for r in rotations],
                 "target_side": target_side.value,
                 "num_rotations": num_rotations,
+                "difficulty": {
+                    "rotations": (self.config.min_rotations, self.config.max_rotations),
+                },
             },
         }
 
@@ -191,17 +200,12 @@ class ColorCubeRotationDataset(ProceduralDataset):
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
         reward = 0.0
-        metadata = entry["metadata"]
         if answer is not None:
             try:
-                answer_formatted = answer.lower()
-                solved = answer_formatted == metadata["answer"]
+                answer_formatted = answer.strip().lower()
+                solved = answer_formatted == entry["answer"].strip().lower()
                 if solved:
                     reward = 1.0
-                elif metadata["answer"] in answer_formatted:
-                    reward = 0.25
-                elif len(answer.strip()) > 0:
-                    reward = 0.05
                 else:
                     reward = 0.01
             except:
@@ -209,4 +213,21 @@ class ColorCubeRotationDataset(ProceduralDataset):
         return reward
 
 
-register_dataset("color_cube_rotation", ColorCubeRotationDataset, ColorCubeRotationConfig)
+class ColorCubeRotationCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(ColorCubeRotationCurriculum.__name__, ColorCubeRotationConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="rotations",
+                levels=[1, 5, 10, 50, 100],
+                description="Number of rotations to perform on the cube",
+                lower_field_name="min_rotations",
+                upper_field_name="max_rotations",
+                ensure_interval=True,
+            )
+        )
+
+
+register_dataset(DATASET_NAME, ColorCubeRotationDataset, ColorCubeRotationConfig, ColorCubeRotationCurriculum)

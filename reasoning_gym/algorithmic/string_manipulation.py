@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Your job is to repeatedly transform a string according to a set of rules until no further transformations can be performed, or a state is repeated.
@@ -17,22 +18,13 @@ Evaluate the following rules in order, and apply the first applicable rule to th
 Once you have applied a rule, repeat the process with the new string until no further transformations can be performed (i.e. the string doesn't change), or a state is repeated.
 If a state is repeated, the process is terminated, and the repeated state is discarded (i.e. is not considered as the final answer) and the state before the repeated state is considered as the final answer.
 
-Example:
-- Input:
-    - String: abbac
-    - Rules:
-        1. If the string prefix is 'ab', replace it with 'ca'.
-        2. If the string prefix is 'ca', replace it with 'bb' and append 'c' to the end.
-        3. If the string ends with 'aa', replace it with 'cc'.
-- Output: bbbacc
-- Explanation:
-    - In the first iteration, rule 1 is applied to the string abbac, resulting in cabac
-    - In the second interation, rule 1 doesn't apply, but rule 2 is applied to the string cabac, resulting in bbbacc
-    - In the third iteration, none of the rules (1, 2, 3) apply, so the process is terminated, and the final answer is bbbacc
+Your output should be the final transformed string after applying all the rules.
 
 Transform the following string according to the above list of rules:
 {string}
 """
+
+DATASET_NAME = "string_manipulation"
 
 
 @dataclass
@@ -53,6 +45,7 @@ class StringManipulationConfig:
         assert self.min_string_length <= self.max_string_length, "Minimum string length should be less than maximum"
         assert 3 <= self.min_num_rules, "Minimum number of rules should be at least 3"
         assert self.min_num_rules <= self.max_num_rules, "Minimum number of rules should be less than maximum"
+        assert self.max_num_rules <= 20, "Maximum number of rules should be at most 20"
 
 
 class StringManipulationDataset(ProceduralDataset):
@@ -188,12 +181,43 @@ class StringManipulationDataset(ProceduralDataset):
             "question": QUESTION_TEMPLATE.format(string=string, rules=rules_str),
             "answer": str(answer),
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "string": string,
                 "solution": answer,
                 "states": states,
                 "selected_rules": [rule for rule, _ in selected_rules],
+                "string_length": string_length,
+                "num_rules": num_rules,
+                "difficulty": {
+                    "string_length": (self.config.min_string_length, self.config.max_string_length),
+                    "num_rules": (self.config.min_num_rules, self.config.max_num_rules),
+                },
             },
         }
 
 
-register_dataset("string_manipulation", StringManipulationDataset, StringManipulationConfig)
+class StringManipulationCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(StringManipulationCurriculum.__name__, StringManipulationConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="string_length",
+                levels=[10, 50, 100, 500],
+                description="Length of the string",
+                lower_field_name="min_string_length",
+                upper_field_name="max_string_length",
+            ),
+            RangeAttributeDefinition(
+                name="num_rules",
+                levels=[5, 10, 15, 20],
+                description="Number of rules to apply",
+                lower_field_name="min_num_rules",
+                upper_field_name="max_num_rules",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, StringManipulationDataset, StringManipulationConfig, StringManipulationCurriculum)

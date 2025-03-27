@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Given a string consisting of characters A, B, C, D, and E, your job is to insert a character according to the following pattern:
@@ -18,18 +19,13 @@ QUESTION_TEMPLATE = """Given a string consisting of characters A, B, C, D, and E
 
 Once you have inserted a character, you have to skip over the substring and the inserted character and continue the search from the next character.
 
-Example
-- Input: DDABCDEEDEAB
-- Output: DDABCDAEEDEABD
-- Explanation:
-    - Theere are two inserted characters: DDABCD[A]EEDEAB[D] (shown in square brackets)
-    - First, we insert A after ABCD.
-    - Even though with the newly inserted 'A' we can obtain the substring BCD[A], we can't use it to insert another character.
-    - Lastly, we insert D after DEAB.
-    - Therefore, the final answer is DDABCDAEEDEABD (represented as a string, instead of a list of characters).
+Your output should be a string that has been modified according to the pattern.
 
 Given the following string, provide the answer after inserting the characters according to the pattern: {string}
 """
+
+
+DATASET_NAME = "string_insertion"
 
 
 @dataclass
@@ -83,7 +79,7 @@ class StringInsertionDataset(ProceduralDataset):
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
         """Overwrite this method in derived classes if a single oracle answer is not available."""
         oracle_answer = entry["answer"]
-        if answer is not None:
+        if isinstance(answer, str):
             if answer == oracle_answer:
                 return 1.0
             else:
@@ -91,9 +87,9 @@ class StringInsertionDataset(ProceduralDataset):
                     # check if answer is python list of characters
                     answer = "".join(eval(answer))
                     if answer == oracle_answer:
-                        return 0.5
-                except Exception as e:
-                    return 0.01
+                        return 0.1
+                except Exception:
+                    pass
         return 0.0
 
     def __getitem__(self, idx: int) -> dict:
@@ -108,8 +104,34 @@ class StringInsertionDataset(ProceduralDataset):
         return {
             "question": QUESTION_TEMPLATE.format(string=string),
             "answer": str(answer),
-            "metadata": {"string": string, "solution": answer},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "string": string,
+                "solution": answer,
+                "string_length": string_length,
+                "difficulty": {
+                    "string_length": (self.config.min_string_length, self.config.max_string_length),
+                },
+            },
         }
 
 
-register_dataset("string_insertion", StringInsertionDataset, StringInsertionConfig)
+class StringInsertionCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(StringInsertionCurriculum.__name__, StringInsertionConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="string_length",
+                levels=[10, 50, 100, 1000],
+                description="Length of the string",
+                lower_field_name="min_string_length",
+                upper_field_name="max_string_length",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, StringInsertionDataset, StringInsertionConfig, StringInsertionCurriculum)

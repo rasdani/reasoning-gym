@@ -15,27 +15,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
-EXAMPLE_CASE = """- Input:
-  BASE
-+ BALL
-------
- GAMES
-
-- Output: B=7, A=4, S=8, E=3, L=5, M=9, G=1
-- Explanation:
-    * BASE + BALL = GAMES, two 4-digit numbers sum to 5 digits, so G = 1.
-    * Units: E + L = S (no carry).
-    * Tens: S + L = E + 10 (carry 1). Substitute S = E + L to get E + 2L = E + 10, so L = 5.
-    * Since S = E + 5 and S is one digit, E < 5.
-    * Hundreds: 2A + 1 = M (with carry).
-    * Thousands: 2B = A + 10 (carry makes G = 1). So A = 2B - 10.
-    * Try B = 7: Then A = 4 and M = 2(4) + 1 = 9.
-    * With E < 5, try E = 3: Then S = 8.
-    * Solution: B = 7, A = 4, S = 8, E = 3, L = 5, M = 9, G = 1
-    * Verify: BASE (7483) + BALL (7455) = GAMES (14938).
-"""
+DATASET_NAME = "cryptarithm"
 
 
 @dataclass
@@ -45,7 +28,6 @@ class CryptarithmConfig:
     min_words: int = 2  # Minimum number of addends
     max_words: int = 3  # Maximum number of addends
     allow_leading_zero: bool = False
-    include_example: bool = True
     seed: Optional[int] = None
     size: int = 500  # Number of puzzle instances to generate
 
@@ -71,9 +53,9 @@ class CryptarithmDataset(ProceduralDataset):
 
     def __getitem__(self, idx: int) -> dict:
         rng = Random(self.seed + idx)
-        return self._create_single_puzzle(rng)
+        return self._create_single_puzzle(rng, idx)
 
-    def _create_single_puzzle(self, rng: Random) -> dict:
+    def _create_single_puzzle(self, rng: Random, idx: int) -> dict:
         """
         Creates one puzzle with N addends (2..3) plus a result.
         Ensures total distinct digits <= 10.
@@ -189,8 +171,6 @@ class CryptarithmDataset(ProceduralDataset):
             )
             + 'Provide a comma separated mapping from letters to digits that satisfies the equation in your final answer. Output format: "A=1,B=2,C=3" (without quotes)\n'
         )
-        if self.config.include_example:
-            question_str += "\nHere's an example:\n" + EXAMPLE_CASE
 
         # 8) Create a human-readable answer, e.g. "A=1,B=0,C=9,..."
         sorted_letter_keys = sorted(letter_to_digit.keys())
@@ -201,6 +181,8 @@ class CryptarithmDataset(ProceduralDataset):
             "question": question_str,
             "answer": answer_str,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "letters": list(letter_to_digit.keys()),
                 "word_values": words_numbers,
                 "sum_number": total_sum,
@@ -208,6 +190,9 @@ class CryptarithmDataset(ProceduralDataset):
                 "result_letters": result_letters,
                 "digit_to_letter": digit_to_letter,
                 "letter_to_digit": letter_to_digit,
+                "difficulty": {
+                    "words": (self.config.min_words, self.config.max_words),
+                },
             },
         }
 
@@ -223,6 +208,9 @@ class CryptarithmDataset(ProceduralDataset):
         Returns:
             float: The computed score between 0.0 and 1.0.
         """
+        if not isinstance(answer, str):
+            return 0.0
+
         correct_mapping = {}
         correct_answer_str = entry["answer"]  # e.g. "A=1,B=7,..."
         for pair in correct_answer_str.split(","):
@@ -257,4 +245,23 @@ class CryptarithmDataset(ProceduralDataset):
         return (total_correct / total) * 0.7 + 0.3
 
 
-register_dataset("cryptarithm", CryptarithmDataset, CryptarithmConfig)
+class CryptarithmCurriculum(BaseCurriculum):
+    """Curriculum for Cryptarithm puzzles."""
+
+    def __init__(self):
+        super().__init__(CryptarithmCurriculum.__name__, CryptarithmConfig)
+
+        # Define the attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="words",
+                levels=[2, 5, 10, 50],
+                description="Number of words in the cryptarithm puzzle",
+                lower_field_name="min_words",
+                upper_field_name="max_words",
+                ensure_interval=True,
+            )
+        )
+
+
+register_dataset(DATASET_NAME, CryptarithmDataset, CryptarithmConfig, CryptarithmCurriculum)

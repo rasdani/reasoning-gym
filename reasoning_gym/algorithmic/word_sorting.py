@@ -6,6 +6,7 @@ from enum import StrEnum
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..data import read_data_file
 from ..factory import ProceduralDataset, register_dataset
 
@@ -21,19 +22,12 @@ class TextTransformation(StrEnum):
 
 QUESTION_TEMPLATE = """Your task is to sort words in ascending or descending order using ASCII/Unicode ordering.
 
-Example:
-- Input: Sort these words in ascending order (using ASCII/Unicode ordering) and return them as a comma-separated list: freely, idea, indemnify, last, END, solving
-- Output: END, freely, idea, indemnify, last, solving
-- Explanation:
-    - Uppercase letters come before lowercase letters, hence why "END" comes first.
-    - "freely" comes before "idea" because "f" comes before "i".
-    - "idea" comes before "indemnify" because even though they both start with "i", "d" comes before "n".
-    - "indemnify" comes before "last" because "i" comes before "l".
-    - "last" comes before "solving" because "l" comes before "s".
-    - Finally, the output is provided as a comma separated list of the sorted words.
+Your output should be a comma-separated list of words, e.g. word_1, word_2, word_3
 
 Now, sort these words in {direction} order (using ASCII/Unicode ordering) and return them as a comma-separated list: {words}
 """
+
+DATASET_NAME = "word_sorting"
 
 
 @dataclass
@@ -114,11 +108,18 @@ class WordSortingDataset(ProceduralDataset):
             "question": QUESTION_TEMPLATE.format(direction=direction, words=", ".join(transformed_words)),
             "answer": ", ".join(answer),
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "original_words": original_words,
+                "sorted_words": answer,
                 "transformed_words": transformed_words,
                 "direction": direction,
-                "transformation": self.config.transformation,
-                "sorted_words": answer,
+                "num_words": len(original_words),
+                "word_length": max(len(word) for word in original_words),
+                "difficulty": {
+                    "num_words": (self.config.min_words, self.config.max_words),
+                    "word_length": (self.config.min_word_length, self.config.max_word_length),
+                },
             },
         }
 
@@ -130,10 +131,30 @@ class WordSortingDataset(ProceduralDataset):
                 return 1.0
             elif sorted(parsed_answer) == oracle_answer:
                 return 0.2
-            else:
-                return 0.01
 
         return 0.0
 
 
-register_dataset("word_sorting", WordSortingDataset, WordSortingConfig)
+class WordSortingCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(WordSortingCurriculum.__name__, WordSortingConfig)
+
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="num_words",
+                levels=[5, 10, 20, 30],
+                description="Number of words to sort",
+                lower_field_name="min_words",
+                upper_field_name="max_words",
+            ),
+            RangeAttributeDefinition(
+                name="word_length",
+                levels=[3, 6, 9, 12],
+                description="Length of words to sort",
+                lower_field_name="min_word_length",
+                upper_field_name="max_word_length",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, WordSortingDataset, WordSortingConfig)

@@ -9,30 +9,18 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Given a square matrix, your job is to find the taxicab (Manhattan) distance of the nearest 0 for each cell.
 
-Example:
-- Input: Find the distance to the nearest 0 for each cell in the matrix below:
-0 0 0
-0 1 0
-1 1 1
-- Output:
-0 0 0
-0 1 0
-1 2 1
-- Explanation
-    - Each cell with a 0 has a distance of 0 to itself.
-    - The cell at (1, 1) has a distance of 1 to the nearest 0 (any of the three 0's at (1, 0), (0, 1), (1, 2)).
-    - The cell at (2, 0) has a distance of 1 to the nearest 0 (the 0 at (1, 0)).
-    - The cell at (2, 1) has a distance of 2 to the nearest 0 (any of the two 0's at (1, 0), (1, 2))
-    - The cell at (2, 2) has a distance of 1 to the nearest 0 (the 0 at (1, 2)).
-    - Hence, the final answer is the matrix is the output shown above, where each cell contains the distance to the nearest 0, in the same format as the input matrix.
+The output should be a matrix of the same size as the input matrix, where each cell contains the distance to the nearest 0.
 
 Find the distance to the nearest 0 for each cell in the matrix below:
 {matrix}
 """
+
+DATASET_NAME = "binary_matrix"
 
 
 @dataclass
@@ -59,9 +47,8 @@ class BinaryMatrixDataset(ProceduralDataset):
     def __init__(self, config: BinaryMatrixConfig):
         super().__init__(config=config, seed=config.seed, size=config.size)
 
-    def _get_binary_matrix(self, rng: Random) -> list[list[int]]:
+    def _get_binary_matrix(self, rng: Random, n: int) -> list[list[int]]:
         """Generate a random binary matrix"""
-        n = rng.randint(self.config.min_n, self.config.max_n)
         # Ensure at least one 0 in the matrix, so that a solution exists
         numbers = [0] + [0 if rng.random() < self.config.p_zero else 1 for _ in range(n**2 - 1)]
         rng.shuffle(numbers)
@@ -123,16 +110,17 @@ class BinaryMatrixDataset(ProceduralDataset):
                     # check if answer is python list of lists
                     answer = self._matrix_to_str(eval(answer))
                     if answer == oracle_answer:
-                        return 0.5
-                except Exception as e:
-                    return 0.01
+                        return 0.1
+                except Exception:
+                    return 0.0
         return 0.0
 
     def __getitem__(self, idx: int) -> dict:
         """Generate a single Binary Matrix question"""
         rng = Random(self.seed + idx)
 
-        matrix = self._get_binary_matrix(rng)
+        n = rng.randint(self.config.min_n, self.config.max_n)
+        matrix = self._get_binary_matrix(rng, n)
         matrix_str = self._matrix_to_str(matrix)
 
         answer = self._get_distances(matrix)
@@ -141,8 +129,39 @@ class BinaryMatrixDataset(ProceduralDataset):
         return {
             "question": QUESTION_TEMPLATE.format(matrix=matrix_str),
             "answer": answer_str,
-            "metadata": {"matrix": matrix, "solution": answer},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "matrix": matrix,
+                "solution": answer,
+                "n": n,
+                "difficulty": {
+                    "n": (self.config.min_n, self.config.max_n),
+                    "p_zero": self.config.p_zero,
+                },
+            },
         }
 
 
-register_dataset("binary_matrix", BinaryMatrixDataset, BinaryMatrixConfig)
+class BinaryMatrixCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(BinaryMatrixCurriculum.__name__, BinaryMatrixConfig)
+
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="p_zero",
+                field_name="p_zero",
+                levels=[0.5, 0.25, 0.1, 0.05],
+                description="Board size",
+            ),
+            RangeAttributeDefinition(
+                name="n",
+                levels=[10, 50, 250, 1000],
+                description="Board size",
+                lower_field_name="min_n",
+                upper_field_name="max_n",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, BinaryMatrixDataset, BinaryMatrixConfig, BinaryMatrixCurriculum)

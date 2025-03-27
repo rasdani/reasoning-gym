@@ -6,9 +6,12 @@ from math import gcd
 from random import Random
 from typing import Any, Optional, Sequence
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = "Simplify the fraction {question_fraction} to its lowest terms. Give only the simplified fraction as your final answer."
+
+DATASET_NAME = "fraction_simplification"
 
 
 @dataclass
@@ -42,7 +45,7 @@ class FractionSimplificationDataset(ProceduralDataset):
     def __init__(self, config: FractionSimplificationConfig):
         super().__init__(config=config, seed=config.seed, size=config.size)
 
-    def _generate_fraction(self, rng: Random) -> tuple[int, int, int, int]:
+    def _generate_fraction(self, rng: Random) -> tuple[int, int, int, int, int]:
         """Generate a random fraction and its simplified form.
         Returns (numerator, denominator, simplified_num, simplified_den)"""
         # Try to generate valid fractions until we get one that meets our criteria
@@ -69,7 +72,7 @@ class FractionSimplificationDataset(ProceduralDataset):
                 factor = rng.randint(self.config.min_factor, self.config.max_factor)
                 numerator = simplified_num * factor
                 denominator = simplified_den * factor
-                return numerator, denominator, simplified_num, simplified_den
+                return numerator, denominator, simplified_num, simplified_den, factor
 
         # If we failed to find a good fraction after max attempts,
         # generate one that's guaranteed to be within bounds
@@ -81,7 +84,7 @@ class FractionSimplificationDataset(ProceduralDataset):
             simplified_num, simplified_den = simplified_den, simplified_num
 
         factor = rng.randint(self.config.min_factor, self.config.max_factor)
-        return (simplified_num * factor, simplified_den * factor, simplified_num, simplified_den)
+        return (simplified_num * factor, simplified_den * factor, simplified_num, simplified_den, factor)
 
     def _format_fraction(self, num: int, den: int, style: str = "plain") -> str:
         """Format a fraction in various styles"""
@@ -100,7 +103,7 @@ class FractionSimplificationDataset(ProceduralDataset):
         """Generate a single fraction simplification task"""
         rng = Random(self.seed + idx)
 
-        num, den, simple_num, simple_den = self._generate_fraction(rng)
+        num, den, simple_num, simple_den, factor = self._generate_fraction(rng)
 
         # Choose a random style from configured styles
         style = self.config.styles[rng.randint(0, len(self.config.styles) - 1)]
@@ -113,12 +116,19 @@ class FractionSimplificationDataset(ProceduralDataset):
             "question": QUESTION_TEMPLATE.format(question_fraction=question_fraction),
             "answer": answer_fraction,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "numerator": num,
                 "denominator": den,
                 "simplified_numerator": simple_num,
                 "simplified_denominator": simple_den,
                 "reduction_factor": num // simple_num,  # Will be same as den // simple_den
                 "style": style,
+                "factor": factor,
+                "difficulty": {
+                    "value": (self.config.min_value, self.config.max_value),
+                    "factor": (self.config.min_factor, self.config.max_factor),
+                },
             },
         }
 
@@ -152,4 +162,34 @@ class FractionSimplificationDataset(ProceduralDataset):
         return reward
 
 
-register_dataset("fraction_simplification", FractionSimplificationDataset, FractionSimplificationConfig)
+class FractionSimplificationCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(FractionSimplificationCurriculum.__name__, FractionSimplificationConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="value",
+                levels=[1, 100, 1000, 10000],
+                description="Value range for numerator and denominator",
+                lower_field_name="min_value",
+                upper_field_name="max_value",
+                ensure_interval=True,
+            ),
+            RangeAttributeDefinition(
+                name="factor",
+                levels=[1, 10, 100, 1000],
+                description="Factor range for generating unsimplified fractions",
+                lower_field_name="min_factor",
+                upper_field_name="max_factor",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(
+    DATASET_NAME,
+    FractionSimplificationDataset,
+    FractionSimplificationConfig,
+    FractionSimplificationCurriculum,
+)

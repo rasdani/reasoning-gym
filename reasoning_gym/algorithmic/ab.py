@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "ab"
 
 
 def generate_program(length, rng):
@@ -102,19 +105,7 @@ To *compute* a program, we must rewrite neighbor tokens, using the rules:
     B# #B ... becomes ... nothing
 
 In other words, whenever two neighbor tokens have their '#' facing each-other,
-they must be rewritten according to the corresponding rule. For example, the
-first example shown here is computed as:
-
-    B# A# #B #A B# =
-    B# #B A# #A B# =
-    A# #A B# =
-    B#
-
-The steps were:
-1. We replaced `A# #B` by `#B A#`.
-2. We replaced `B# #B` by nothing.
-3. We replaced `A# #A` by nothing.
-The final result was just `B#`.
+they must be rewritten according to the corresponding rule.
 
 Now, consider the following program:
 
@@ -126,7 +117,13 @@ Return the final state of the program.
         return {
             "question": prompt,
             "answer": " ".join(steps[-1]),
-            "metadata": {},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "difficulty": {
+                    "length": self.config.length,
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
@@ -142,13 +139,27 @@ Return the final state of the program.
             float: The computed score between 0.0 and 1.0.
         """
 
-        if answer == None:
-            return 0.0
-        if answer != entry["answer"]:
-            return 0.01
-        else:
+        if answer == entry["answer"]:
             return 1.0  # Yay
+        return 0.0
+
+
+class ABCurriculum(BaseCurriculum):
+    """Curriculum for A::B dataset"""
+
+    def __init__(self):
+        super().__init__(ABCurriculum.__name__, ABConfig)
+
+        # Define attributes
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="length",
+                field_name="length",
+                levels=[1, 10, 50, 100],
+                description="Length of the A::B program",
+            )
+        )
 
 
 # Register the dataset
-register_dataset("ab", ABDataset, ABConfig)
+register_dataset(DATASET_NAME, ABDataset, ABConfig, ABCurriculum)

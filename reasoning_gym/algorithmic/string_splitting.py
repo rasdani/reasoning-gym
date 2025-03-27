@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """There is a dismantling engineer who has old machines A, B, and C.
@@ -23,19 +24,11 @@ After you make use of a rule, you should update the counts of each machine and p
 The output should be the count of each machine and part type after the rules have been exhaustively applied in the following order: A B C X Y Z.
 For example 1 0 1 5 4 3 means that you have 1 machine A, 0 machine B, 1 machine C, 5 part X, 4 part Y, and 3 part Z.
 
-Example:
-- Input: You have 2 machines A, 0 machines B, and 1 machine C.
-- Output: 0 0 1 2 0 2
-- Explanation
-    0. Initial state: 2 0 1 0 0 0
-    1. We can apply rule 1 and trade 1 machine A for 2 part X and 1 part Y: 1 0 1 2 1 0
-    2. Starting over, we can apply rule 1 again: 0 0 1 4 2 0
-    3. In the next iteration, we can apply rule 5 and trade 1 part X and 1 part Y for 1 part Z: 0 0 1 3 1 1
-    4. In the next iteration, we can apply rule 5 again: 0 0 1 2 0 2
-    5. We can't apply any more rules, so the final answer is 0 0 1 2 0 2
-
 Now, you have {A_machine} machine A, {B_machine} machine B, and {C_machine} machine C. Provide the count of each machine and part type after applying the above rules.
+Note: Apply the rules at most {max_iterations} times. If the rules cannot be applied anymore, or if you have reached the maximum number of iterations, stop and provide the current counts of each machine and part type.
 """
+
+DATASET_NAME = "string_splitting"
 
 
 @dataclass
@@ -126,10 +119,41 @@ class StringSplittingDataset(ProceduralDataset):
         answer_str = " ".join(str(x) for x in answer)
 
         return {
-            "question": QUESTION_TEMPLATE.format(A_machine=A_machine, B_machine=B_machine, C_machine=C_machine),
+            "question": QUESTION_TEMPLATE.format(
+                A_machine=A_machine,
+                B_machine=B_machine,
+                C_machine=C_machine,
+                max_iterations=self.config.max_iterations,
+            ),
             "answer": answer_str,
-            "metadata": {"states": states, "solution": answer},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "states": states,
+                "solution": answer,
+                "initial_machines": (A_machine, B_machine, C_machine),
+                "difficulty": {
+                    "initial_machines": (self.config.min_initial_machines, self.config.max_initial_machines),
+                },
+            },
         }
 
 
-register_dataset("string_splitting", StringSplittingDataset, StringSplittingConfig)
+class StringSplittingCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(StringSplittingCurriculum.__name__, StringSplittingConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="initial_machines",
+                levels=[10, 50, 100, 500],
+                description="Number of initial machines",
+                lower_field_name="min_initial_machines",
+                upper_field_name="max_initial_machines",
+                ensure_interval=True,
+            )
+        )
+
+
+register_dataset(DATASET_NAME, StringSplittingDataset, StringSplittingConfig, StringSplittingCurriculum)

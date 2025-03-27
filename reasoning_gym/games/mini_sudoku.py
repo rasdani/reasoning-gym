@@ -5,7 +5,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "mini_sudoku"
 
 
 @dataclass
@@ -191,11 +194,20 @@ class MiniSudokuDataset(ProceduralDataset):
         return {
             "question": question,
             "answer": solution_str,
-            "metadata": {"puzzle": puzzle, "solution": solved_board, "num_empty": num_empty},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "puzzle": puzzle,
+                "solution": solved_board,
+                "num_empty": num_empty,
+                "difficulty": {
+                    "empty": (self.config.min_empty, self.config.max_empty),
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
-        if not answer:
+        if not isinstance(answer, str) or len(answer) == 0:
             return 0.0
 
         oracle_answer = entry["answer"]
@@ -232,4 +244,21 @@ class MiniSudokuDataset(ProceduralDataset):
         return reward
 
 
-register_dataset("mini_sudoku", MiniSudokuDataset, MiniSudokuConfig)
+class MiniSudokuCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(MiniSudokuCurriculum.__name__, MiniSudokuConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="empty",
+                levels=[4, 6, 8, 10],
+                description="Number of empty cells in the puzzle",
+                lower_field_name="min_empty",
+                upper_field_name="max_empty",
+                ensure_interval=True,
+            )
+        )
+
+
+register_dataset(DATASET_NAME, MiniSudokuDataset, MiniSudokuConfig, MiniSudokuCurriculum)

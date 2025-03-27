@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..data import get_data_file_path
 from ..factory import ProceduralDataset, register_dataset
 
@@ -39,6 +40,9 @@ BOARD_TOTAL_CELLS = BOARD_SIZE * BOARD_SIZE
 TARGET = PRIMARY_ROW * BOARD_SIZE + BOARD_SIZE - PRIMARY_SIZE
 H = 1  # horizontal stride
 V = BOARD_SIZE  # vertical stride
+
+
+DATASET_NAME = "rush_hour"
 
 
 # board boundary limits
@@ -149,15 +153,22 @@ class RushHourDataset(ProceduralDataset):
         instructions = (
             "Move the red car (AA) to the exit on the right.\n"
             "Specify moves in the format: 'F+1 K+1 M-1 C+3 H+2 ...'\n"
-            "where the letter is the vehicle and +/- number is spaces to move right/left or down/up."
+            "where the letter is the vehicle and +/- number is spaces to move right/left or down/up.\n"
+            "Walls are marked with an 'x'. Cars cannot move through walls, and walls cannot be moved.\n"
+            "A car oriented vertically can only move up and down, a car oriented horizontally can only move left and right."
         )
 
         return {
             "question": f"{instructions}\n\nBoard:\n{board_display}",
             "answer": None,  # Multiple valid solutions exist
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "board_config": board_config,
                 "min_moves": min_moves,
+                "difficulty": {
+                    "min_moves": (self.config.min_moves, self.config.max_moves),
+                },
             },
         }
 
@@ -171,7 +182,7 @@ class RushHourDataset(ProceduralDataset):
         Returns:
             1.0 if solution reaches goal state, 0.0 otherwise
         """
-        if not answer:
+        if not isinstance(answer, str) or len(answer) == 0:
             return 0.0
 
         try:
@@ -182,9 +193,9 @@ class RushHourDataset(ProceduralDataset):
             board.perform_moves(answer)
 
             # Check if solved
-            return 1.0 if board.solved else 0.0
+            return 1.0 if board.solved else 0.01
 
-        except (ValueError, IndexError, AttributeError) as e:
+        except:
             # Handle malformed input gracefully
             return 0.0
 
@@ -313,10 +324,10 @@ class Board:
 
     def perform_moves(self, ops: str) -> None:
         # This pattern matches:
-        # - One or more letters (captured in group 1)
+        # - One letter (captured in group 1)
         # - A plus or minus sign (captured in group 2)
         # - One or more digits (captured in group 3)
-        pattern = r"([A-Z]+)([+-])(\d+)"
+        pattern = r"([A-Z])([+-])(\d+)"
 
         # Find all matches in the string
         matches = re.findall(pattern, ops)
@@ -326,9 +337,7 @@ class Board:
         move_ops = [(chars, int(num) if sign == "+" else -int(num)) for chars, sign, num in matches]
 
         for target, dir in move_ops:
-            print(target, dir)
             self.move(target, dir)
-            print(self.board_str())
 
     @property
     def solved(self) -> bool:
@@ -365,5 +374,22 @@ class Board:
         return "".join(s)
 
 
+class RushHourCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(RushHourCurriculum.__name__, RushHourConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="min_moves",
+                levels=[5, 20, 35, 50],
+                description="Minimum possible number of moves",
+                lower_field_name="min_moves",
+                upper_field_name="max_moves",
+                ensure_interval=True,
+            )
+        )
+
+
 # Register the dataset
-register_dataset("rush_hour", RushHourDataset, RushHourConfig)
+register_dataset(DATASET_NAME, RushHourDataset, RushHourConfig, RushHourCurriculum)

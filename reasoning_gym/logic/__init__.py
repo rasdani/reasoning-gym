@@ -2,26 +2,33 @@
 Logic tasks for training reasoning capabilities.
 """
 
-from .aiw import AliceInWonderlandConfig, AliceInWonderlandDataset
-from .circuit_logic import CircuitLogicConfig, CircuitLogicDataset
-from .propositional_logic import PropositionalLogicConfig, PropositionalLogicDataset
-from .self_reference import SelfReferenceConfig, SelfReferenceDataset
+from .aiw import AliceInWonderlandConfig, AliceInWonderlandCurriculum, AliceInWonderlandDataset
+from .circuit_logic import CircuitLogicConfig, CircuitLogicCurriculum, CircuitLogicDataset
+from .knights_knaves import KnightsKnavesConfig, KnightsKnavesDataset
+from .propositional_logic import PropositionalLogicConfig, PropositionalLogicCurriculum, PropositionalLogicDataset
+from .self_reference import SelfReferenceConfig, SelfReferenceCurriculum, SelfReferenceDataset
 from .syllogisms import SyllogismConfig, SyllogismDataset
-from .zebra_puzzles import ZebraConfig, ZebraDataset
+from .zebra_puzzles import ZebraConfig, ZebraCurriculum, ZebraDataset
 
 __all__ = [
     "AliceInWonderlandConfig",
+    "AliceInWonderlandCurriculum",
     "AliceInWonderlandDataset",
     "PropositionalLogicConfig",
     "PropositionalLogicDataset",
+    "PropositionalLogicCurriculum",
     "SyllogismConfig",
     "SyllogismDataset",
     "syllogism_dataset",
     "ZebraConfig",
+    "ZebraCurriculum",
     "ZebraDataset",
-    "SelfReference",
+    "SelfReferenceCurriculum",
     "SelfReferenceConfig",
     "SelfReferenceDataset",
     "CircuitLogicConfig",
     "CircuitLogicDataset",
+    "CircuitLogicCurriculum",
+    "KnightsKnavesConfig",
+    "KnightsKnavesDataset",
 ]

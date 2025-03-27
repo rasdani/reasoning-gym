@@ -2,9 +2,12 @@ import random
 from dataclasses import dataclass, field
 from enum import StrEnum
 from itertools import count
-from typing import Optional
+from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "family_relationships"
 
 
 class Gender(StrEnum):
@@ -183,9 +186,9 @@ class FamilyRelationshipsDataset(ProceduralDataset):
 
     def __getitem__(self, idx: int) -> dict:
         rng = random.Random(self.seed + idx)
-
+        family_size = rng.randint(self.config.min_family_size, self.config.max_family_size)
         # Generate family tree
-        family = self._generate_family(rng)
+        family = self._generate_family(rng, family_size)
 
         # Select two people and their relationship
         person1, person2, relationship = self._get_relationship_question(rng, family)
@@ -200,16 +203,20 @@ class FamilyRelationshipsDataset(ProceduralDataset):
             "question": f"{story}\n\n{question}",
             "answer": relationship.value,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "person1": person1.name,
                 "person2": person2.name,
                 "relationship": relationship.value,
                 "family_size": len(family),
+                "difficulty": {
+                    "family_size": (self.config.min_family_size, self.config.max_family_size),
+                },
             },
         }
 
-    def _generate_family(self, rng: random.Random) -> set[Person]:
+    def _generate_family(self, rng: random.Random, family_size: int) -> set[Person]:
         """Generate a random family tree"""
-        family_size = rng.randint(self.config.min_family_size, self.config.max_family_size)
         family = set()
         used_names = set()
 
@@ -356,5 +363,31 @@ class FamilyRelationshipsDataset(ProceduralDataset):
 
         return " ".join(story_parts)
 
+    def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
+        reward = 0.0
+        if isinstance(answer, str):
+            try:
+                answer_formatted = answer.strip().lower()
+                oracle_answer = entry["answer"].strip().lower()
+                if answer_formatted == oracle_answer:
+                    reward = 1.0
+            except:
+                pass
+        return reward
 
-register_dataset("family_relationships", FamilyRelationshipsDataset, FamilyRelationshipsConfig)
+
+class FamilyRelationshipsCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(FamilyRelationshipsCurriculum.__name__, FamilyRelationshipsConfig)
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="family_size",
+                description="The size of the family",
+                levels=list(range(3, 12)),
+                lower_field_name="min_family_size",
+                upper_field_name="max_family_size",
+            )
+        )
+
+
+register_dataset(DATASET_NAME, FamilyRelationshipsDataset, FamilyRelationshipsConfig, FamilyRelationshipsCurriculum)

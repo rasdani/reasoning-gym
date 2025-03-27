@@ -6,7 +6,10 @@ from math import gcd
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "gcd"
 
 
 @dataclass
@@ -54,13 +57,47 @@ class GCDDataset(ProceduralDataset):
         rng = Random(self.seed + idx)
 
         numbers, result = self._generate_numbers(rng)
+        num_terms = len(numbers)
         numbers_str = ", ".join(str(n) for n in numbers)
 
         return {
             "question": f"Find the Greatest Common Divisor (GCD) of these numbers: {numbers_str}. Give only the GCD as your final answer.",
             "answer": str(result),
-            "metadata": {"numbers": numbers, "result": result},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "numbers": numbers,
+                "result": result,
+                "num_terms": num_terms,
+                "difficulty": {
+                    "num_terms": (self.config.min_numbers, self.config.max_numbers),
+                    "max_value": (self.config.min_value, self.config.max_value),
+                },
+            },
         }
 
 
-register_dataset("gcd", GCDDataset, GCDConfig)
+class GCDCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(GCDCurriculum.__name__, GCDConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="num_terms",
+                levels=[2, 3, 4, 5],
+                description="number of terms",
+                lower_field_name="min_numbers",
+                upper_field_name="max_numbers",
+            ),
+            RangeAttributeDefinition(
+                name="max_value",
+                levels=[100, 1000, 10000, 100000],
+                description="maximum value",
+                lower_field_name="min_value",
+                upper_field_name="max_value",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, GCDDataset, GCDConfig)

@@ -4,7 +4,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "number_filtering"
 
 
 @dataclass
@@ -90,12 +93,53 @@ class NumberFilteringDataset(ProceduralDataset):
             ),
             "answer": str(result_strs) if result_strs else "[]",
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "original_numbers": str_numbers,
                 "filter_value": filter_str,
                 "operation": f"{keep_remove}_{larger_smaller}",
                 "result": result_strs,
+                "numbers": len(numbers),
+                "difficulty": {
+                    "numbers": (self.config.min_numbers, self.config.max_numbers),
+                    "decimals": (self.config.min_decimals, self.config.max_decimals),
+                    "value": (self.config.min_value, self.config.max_value),
+                },
             },
         }
 
 
-register_dataset("number_filtering", NumberFilteringDataset, NumberFilteringConfig)
+class NumberFilteringCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(NumberFilteringCurriculum.__name__, NumberFilteringConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="numbers",
+                levels=[10, 100, 500, 1000],
+                description="How many numbers to sort",
+                lower_field_name="min_numbers",
+                upper_field_name="max_numbers",
+                ensure_interval=True,
+            ),
+            RangeAttributeDefinition(
+                name="decimals",
+                levels=[0, 2, 4, 6],
+                description="Number of decimal places",
+                lower_field_name="min_decimals",
+                upper_field_name="max_decimals",
+                ensure_interval=True,
+            ),
+            RangeAttributeDefinition(
+                name="value",
+                levels=[-10_000, 10_000],
+                description="Range of numbers to sort",
+                lower_field_name="min_value",
+                upper_field_name="max_value",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, NumberFilteringDataset, NumberFilteringConfig, NumberFilteringCurriculum)

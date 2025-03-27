@@ -5,7 +5,7 @@ import textwrap
 from pathlib import Path
 
 import reasoning_gym.code.bf
-from reasoning_gym.factory import DATASETS, create_dataset
+from reasoning_gym.factory import DATASETS, create_dataset, has_curriculum
 
 
 def generate_gallery() -> str:
@@ -16,11 +16,13 @@ def generate_gallery() -> str:
     content.append("This gallery shows examples from all available datasets using their default configurations.\n\n")
 
     # Add index
-    content.append("## Available Datasets\n")
+    content.append(f"## Available Datasets ({len(DATASETS)})\n")
+    content.append("Legend: ✅ = Has curriculum, ❌ = No curriculum\n\n")
     for name in sorted(DATASETS.keys()):
         # Create anchor link
         anchor = name.replace(" ", "-").lower()
-        content.append(f"- [{name}](#{anchor})\n")
+        has_curr = "✅" if has_curriculum(name) else "❌"
+        content.append(f"- [{name}](#{anchor}) {has_curr}\n")
     content.append("\n")
 
     # Add examples for each dataset

@@ -59,20 +59,26 @@ def test_power_function_score_function():
     config = PowerFunctionConfig(seed=42)
     dataset = PowerFunctionDataset(config)
 
-    item = dataset[0]
+    for item in dataset:
+        answer = item["answer"]
+        assert dataset.score_answer(answer, item) == 1.0
 
-    # Answer is within 1e-6 of solution
-    answer = str(item["metadata"]["solution"] - 1e-7)
-    assert dataset.score_answer(answer, item) == 1.0
 
-    # Answer is within 1e-1 of solution
-    answer = str(item["metadata"]["solution"] - 1e-2)
-    assert dataset.score_answer(answer, item) == 0.5
+def test_power_function_curriculum():
+    """Test PowerFunctionCurriculum configuration generation and attribute manipulation"""
+    from reasoning_gym.arithmetic import PowerFunctionCurriculum
 
-    # Answer is far from solution
-    answer = str(item["metadata"]["solution"] - 1)
-    assert dataset.score_answer(answer, item) == 0.01
+    curriculum = PowerFunctionCurriculum()
 
-    # Answer is None
-    answer = None
-    assert dataset.score_answer(answer, item) == 0.0
+    base_value = {"size": 150, "seed": 1}
+
+    base_cfg = curriculum.generate_configuration(base_value)
+    assert base_cfg.seed == 1
+    assert base_cfg.size == 150
+    assert base_cfg.min_exponent == 2 and base_cfg.max_exponent == 2
+
+    # Test incrementing attribute levels for exponent & base attributes
+    curriculum.increment_attr_level("exponent")
+
+    increased_cfg = curriculum.generate_configuration(base_value)
+    assert increased_cfg.min_exponent == 2 and increased_cfg.max_exponent == 4

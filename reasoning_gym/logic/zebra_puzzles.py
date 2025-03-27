@@ -2,8 +2,11 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 from .contrib.logic_puzzle.generate import generate_puzzle
+
+DATASET_NAME = "zebra_puzzles"
 
 
 @dataclass
@@ -50,8 +53,9 @@ class ZebraDataset(ProceduralDataset):
             "question": question,
             "answer": answer,
             "metadata": {
-                "num_people": K,
-                "num_characteristics": M,
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "difficulty": {"num_people": K, "num_characteristics": M},
             },
         }
 
@@ -68,12 +72,29 @@ class ZebraDataset(ProceduralDataset):
             float: The computed score between 0.0 and 1.0.
         """
 
-        if answer == None:
-            return 0.0
-        if answer.lower().replace("\n", "") != entry["answer"].lower().replace("\n", ""):
-            return 0.01
-        else:
-            return 1.0  # Yay
+        if isinstance(answer, str):
+            if answer.lower().replace("\n", "") == entry["answer"].lower().replace("\n", ""):
+                return 1.0  # Yay
+        return 0.0
 
 
-register_dataset("zebra_puzzles", ZebraDataset, ZebraConfig)
+class ZebraCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(ZebraCurriculum.__name__, ZebraConfig)
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="num_people",
+                levels=list(range(2, 8)),
+                description="The number of people in the Zebra puzzle",
+                field_name="num_people",
+            ),
+            ScalarAttributeDefinition(
+                name="num_characteristics",
+                levels=list(range(2, 8)),
+                description="The number of characteristics in the Zebra puzzle",
+                field_name="num_characteristics",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, ZebraDataset, ZebraConfig, ZebraCurriculum)

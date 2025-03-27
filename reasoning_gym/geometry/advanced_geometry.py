@@ -6,7 +6,10 @@ import numpy as np
 import sympy
 from sympy.geometry import Point
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "advanced_geometry"
 
 
 @dataclass
@@ -36,16 +39,12 @@ class AdvancedGeometryConfig:
         assert len(self.task_types) > 0, "Must specify at least one task type."
 
 
-# Join format instructions into a single string
-GEOMETRY_FORMAT_INSTRUCTIONS = "\n".join(
-    [
-        "For all geometry problems:",
-        "1. Give coordinates in the form (x, y)",
-        "2. Round decimal answers to 3 decimal places",
-        "3. Use the degree symbol ° for angles",
-        "4. Return only th angle, coordinates, or radius as your answer.",
-    ]
-)
+GEOMETRY_FORMAT_INSTRUCTIONS = """For all geometry problems:
+1. Give coordinates in the form (x, y)
+2. Round decimal answers to 3 decimal places
+3. Use the degree symbol ° for angles
+4. Return only the angle, coordinates, or radius as your answer.
+"""
 
 
 class AdvancedGeometryDataset(ProceduralDataset):
@@ -90,7 +89,13 @@ class AdvancedGeometryDataset(ProceduralDataset):
         else:
             raise ValueError(f"Unknown task_type: {task_type}")
 
+        metadata["source_dataset"] = DATASET_NAME
+        metadata["source_index"] = idx
         metadata["task_type"] = task_type
+        metadata["difficulty"] = {
+            "min_coord": self.config.min_coord,
+            "max_coord": self.config.max_coord,
+        }
 
         return {
             "question": question,
@@ -144,7 +149,6 @@ class AdvancedGeometryDataset(ProceduralDataset):
         question_template = rng.choice(self._prompt_templates["orthocenter"])
         question = question_template.format(A=(A.x, A.y), B=(B.x, B.y), C=(C.x, C.y), a="a", b="b")
         answer_str = f"({x_ortho_approx:.3f}, {y_ortho_approx:.3f})"
-
         metadata = {
             "A": (A.x, A.y),
             "B": (B.x, B.y),
@@ -245,20 +249,17 @@ class AdvancedGeometryDataset(ProceduralDataset):
                     else:
                         reward = 0.01
                 elif metadata["task_type"] == "orthocenter":
-                    x_coord = answer.split(",")[0].replace("(", "").strip()
-                    y_coord = answer.split(",")[1].replace(")", "").strip()
+                    x_coord = float(answer.split(",")[0].replace("(", "").strip())
+                    y_coord = float(answer.split(",")[1].replace(")", "").strip())
 
-                    expected_x = metadata["ortho"][0]
-                    expected_y = metadata["ortho"][1]
-
+                    expected_x = float(metadata["ortho"][0])
+                    expected_y = float(metadata["ortho"][1])
                     if x_coord == expected_x and y_coord == expected_y:
                         reward = 1.0
-                    elif (np.round(float(x_coord), 2) == np.round(float(expected_x), 2)) and (
-                        np.round(float(y_coord), 2) == np.round(float(expected_y), 2)
+                    elif (np.round(x_coord, 3) == np.round(expected_x, 3)) and (
+                        np.round(y_coord, 3) == np.round(expected_y, 3)
                     ):
                         reward = 1.0
-                    elif len(x_coord.strip()) > 0 and len(y_coord.strip()) > 0:
-                        reward = 0.05
                     else:
                         reward = 0.01
                 elif metadata["task_type"] == "incircle_radius":
@@ -272,10 +273,30 @@ class AdvancedGeometryDataset(ProceduralDataset):
                         reward = 0.01
                 else:
                     raise ValueError(f"Unknown task_type: {task_type}")
-            except:
+            except Exception as e:
                 reward = 0.01
         return reward
 
 
+class AdvancedGeometryCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(AdvancedGeometryCurriculum.__name__, AdvancedGeometryConfig)
+
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="min_coord",
+                field_name="min_coord",
+                levels=[-10, -100, -1000, -10000],
+                description="Minimum x/y coordinate",
+            ),
+            ScalarAttributeDefinition(
+                name="max_coord",
+                field_name="max_coord",
+                levels=[10, 100, 1000, 10000],
+                description="Maximum x/y coordinate",
+            ),
+        )
+
+
 # Register the dataset
-register_dataset("advanced_geometry", AdvancedGeometryDataset, AdvancedGeometryConfig)
+register_dataset(DATASET_NAME, AdvancedGeometryDataset, AdvancedGeometryConfig, AdvancedGeometryCurriculum)

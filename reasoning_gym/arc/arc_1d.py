@@ -5,6 +5,8 @@ from typing import Optional
 from ..dataset import ProceduralDataset
 from ..factory import register_dataset
 
+DATASET_NAME = "arc_1d"
+
 
 @dataclass
 class Arc1DConfig:
@@ -92,7 +94,7 @@ class Arc1DDataset(ProceduralDataset):
         # Add test input
         question += "Below is a test input grid. Predict the corresponding output grid by applying the rule you found. "
         question += "Describe how you derived the rule and your overall reasoning process in detail before you submit your answer. "
-        question += "Your final answer must be placed in <output></output> tags and should be just be the text output grid itself.\n\n"
+        question += "Your final answer should be just the test output grid itself.\n\n"
         question += "Input:\n"
         question += " ".join(str(x) for x in test_example["input"])
 
@@ -100,6 +102,8 @@ class Arc1DDataset(ProceduralDataset):
             "question": question,
             "answer": " ".join(str(x) for x in test_example["output"]),
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "task_name": task_name,
                 "size": size,
                 "train_examples": train_examples,
@@ -109,4 +113,4 @@ class Arc1DDataset(ProceduralDataset):
 
 
 # Register the dataset
-register_dataset("arc_1d", Arc1DDataset, Arc1DConfig)
+register_dataset(DATASET_NAME, Arc1DDataset, Arc1DConfig)

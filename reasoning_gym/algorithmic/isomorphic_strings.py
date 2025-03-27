@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Two strings are isomorphic if the characters in one string can be replaced to get the second string.
@@ -18,28 +19,19 @@ All occurrences of a character must be replaced with another character while pre
 
 No two characters may map to the same character, but a character may map to itself.
 
-Example 1:
-Input: egg add
-Output: True
-Explanation: The strings s and t can be made identical by:
-    - Mapping 'e' to 'a'.
-    - Mapping 'g' to 'd'.
-
-Example 2:
-Input: foo bar
-Output: False
-Explanation:
-    - The strings cannot be made identical as 'o' needs to be mapped to both 'a' and 'r'.
-
 Return True if the following two strings are isomorphic, or False otherwise:
 {s} {t}
 """
+
+
+DATASET_NAME = "isomorphic_strings"
 
 
 @dataclass
 class IsomorphicStringsConfig:
     """Configuration for Isomorphic Strings dataset generation"""
 
+    min_string_length: int = 2  # Minimum length of the strings
     max_string_length: int = 10  # Maximum length of the strings
     p_solvable: float = 0.5  # Probability that the generated question is solvable
 
@@ -48,7 +40,9 @@ class IsomorphicStringsConfig:
 
     def validate(self):
         """Validate configuration parameters"""
-        assert 2 <= self.max_string_length, "max_string_length must be at least 2"
+        assert (
+            2 <= self.min_string_length <= self.max_string_length
+        ), "min_string_length must be between 2 and max_string_length"
         assert 0 <= self.p_solvable <= 1, "p_solvable must be between 0 and 1"
 
 
@@ -75,13 +69,13 @@ class IsomorphicStringsDataset(ProceduralDataset):
 
         return True
 
-    def _generate_inputs(self, rng: Random, solvable: bool) -> tuple[str, str]:
+    def _generate_inputs(self, rng: Random, string_length: int, solvable: bool) -> tuple[str, str]:
         """Generate the two input strings"""
         s, t = [], []
         mapping = {}
 
         # Generate a valid isomorphic pair first (leave one character for potential conflict)
-        for _ in range(rng.randint(1, self.config.max_string_length - 1)):
+        for _ in range(string_length - 1):
             char_s = rng.choice(list(self.letters))
             if char_s not in mapping:
                 # Choose a random character that is not already mapped
@@ -107,15 +101,42 @@ class IsomorphicStringsDataset(ProceduralDataset):
         """Generate a single Isomorphic Strings question"""
         rng = Random(self.seed + idx)
 
+        string_length = rng.randint(self.config.min_string_length, self.config.max_string_length)
         solvable = rng.random() < self.config.p_solvable
-        s, t = self._generate_inputs(rng, solvable)
+        s, t = self._generate_inputs(rng, string_length, solvable)
         answer = self._check_isomorphic(s, t)
 
         return {
             "question": QUESTION_TEMPLATE.format(s=s, t=t),
             "answer": str(answer),
-            "metadata": {"words": [s, t], "solution": answer, "solvable": solvable},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "words": [s, t],
+                "solution": answer,
+                "solvable": solvable,
+                "string_length": string_length,
+                "difficulty": {
+                    "string_length": (self.config.min_string_length, self.config.max_string_length),
+                },
+            },
         }
 
 
-register_dataset("isomorphic_strings", IsomorphicStringsDataset, IsomorphicStringsConfig)
+class IsomorphicStringsCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(IsomorphicStringsCurriculum.__name__, IsomorphicStringsConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="string_length",
+                levels=[10, 50, 100, 1000],
+                description="Length of the strings",
+                lower_field_name="min_string_length",
+                upper_field_name="max_string_length",
+            )
+        )
+
+
+register_dataset(DATASET_NAME, IsomorphicStringsDataset, IsomorphicStringsConfig, IsomorphicStringsCurriculum)

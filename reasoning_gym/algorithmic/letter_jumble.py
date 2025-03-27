@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from reasoning_gym.data import read_data_file
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Your task is to unsramble words in a sentence.
@@ -15,23 +16,13 @@ For each word in a sentence, the letter may have been randomly shuffled. Your ta
 
 The order of the words in the sentence is preserved. Moreover, the style of the sentence is preserved (i.e. punctuation, capitalization, new lines, etc.).
 
-Example:
-- Input: Unscramble these words: raendgmeins yWh nya hilcd anc od hatt
-- Output: meanderings Why any child can do that
-- Explanation
-    - We unscramble each of the words independently.
-    - raendgmeins -> meanderings
-    - yWh -> Why
-    - nya -> any
-    - hilcd -> child
-    - anc -> can
-    - od -> do
-    - hatt -> that
-    - The final answer is: meanderings Why any child can do that
-    - Notice that the order of the words is preserved, no new words / symbols (e.g. new lines) are added.
+Your output should be a sentence with the words unscrambled.
 
 Now, unscramble these words: {words}
 """
+
+
+DATASET_NAME = "letter_jumble"
 
 
 @dataclass
@@ -116,12 +107,38 @@ class LetterJumbleDataset(ProceduralDataset):
             "question": QUESTION_TEMPLATE.format(words=" ".join(scrambled_words)),
             "answer": " ".join(selected_words),
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "num_words": num_words,
                 "corruption_level": corruption_level,
                 "scrambled_words": scrambled_words,
                 "original_words": selected_words,
+                "difficulty": {
+                    "word_len": (self.config.min_word_len, self.config.max_word_len),
+                    "words": (self.config.min_words, self.config.max_words),
+                    "corruption_level": (self.config.min_corruption_level, self.config.max_corruption_level),
+                },
             },
         }
+
+    def partial(self, expected_answer, model_answer):
+        expected_words = expected_answer.split()
+        model_words = model_answer.split()
+
+        # Each word in the expected answer is worth an equal fraction of 1.0
+        total_words = len(expected_words)
+        score_per_word = 1.0 / total_words if total_words > 0 else 0
+
+        # Calculate scores word by word
+        scores = []
+        for i, word in enumerate(expected_words):
+            # Check if the corresponding word exists in model_answer and matches exactly
+            if i < len(model_words) and word == model_words[i]:
+                scores.append(score_per_word)
+            else:
+                scores.append(0.0)
+
+        return min(1.0, sum(scores))
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
         """Determine if the solution provided solves this task.
@@ -136,16 +153,49 @@ class LetterJumbleDataset(ProceduralDataset):
             float: The computed score between 0.0 and 1.0.
         """
 
-        oracle_answer = entry["answer"].strip()
-        if answer:
-            answer = answer.strip()
-            if answer == oracle_answer:
-                return 1.0
-            elif answer.lower() == oracle_answer.lower():
-                return 0.5
-            else:
-                return 0.01
-        return 0.0
+        if not isinstance(answer, str):
+            return 0.0
+
+        oracle_answer = entry["answer"].strip().lower()
+        answer = answer.strip().lower()
+        if answer == oracle_answer:
+            return 1.0  # Perfect score!
+        else:
+            partial_score = self.partial(oracle_answer, answer)
+            return partial_score
 
 
-register_dataset("letter_jumble", LetterJumbleDataset, LetterJumbleConfig)
+class LetterJumbleCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(LetterJumbleCurriculum.__name__, LetterJumbleConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="word_len",
+                levels=[5, 15, 30, 50],
+                description="Word length",
+                lower_field_name="min_word_len",
+                upper_field_name="max_word_len",
+                ensure_interval=True,
+            ),
+            RangeAttributeDefinition(
+                name="words",
+                levels=[10, 50, 100, 500],
+                description="Number of words",
+                lower_field_name="min_words",
+                upper_field_name="max_words",
+                ensure_interval=True,
+            ),
+            RangeAttributeDefinition(
+                name="corruption_level",
+                levels=[0.1, 0.3, 0.6, 0.9],
+                description="Corruption level",
+                lower_field_name="min_corruption_level",
+                upper_field_name="max_corruption_level",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, LetterJumbleDataset, LetterJumbleConfig, LetterJumbleCurriculum)

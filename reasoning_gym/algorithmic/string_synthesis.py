@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """There are nine different blocks [A] [B] [C] {{A}} {{B}} {{C}} (A) (B) (C)
@@ -23,18 +24,12 @@ In the case a state is repeated the answer is the state before the repetition!
 The output should be the count of each block type after the rules have been applied in the order they are listed above.
 For example 1 0 3 0 2 0 0 0 1 means that you have 1 [A] 0 [B] 3 [C] 0 {{A}} 2 {{B}} 0 {{C}} 0 (A) 0 (B) 1 (C).
 
-Example:
-- Input: You have 2 [A], 3 [B], and 3 [C].
-- Output: 0 0 0 2 1 0 0 0 0
-- Explanation:
-    0. Initial state: 2 3 3 0 0 0 0 0 0
-    1. We can apply Rule 1 and obtain 1 {{A}}. New state: 1 2 2 1 0 0 0 0 0
-    2. We can apply Rule 1 again and obtain 1 {{A}}. New state 0 1 1 2 0 0 0 0 0
-    3. We can apply Rule 3 and obtain 1 {{B}}. New state 0 0 0 2 1 0 0 0 0
-    4. No more rules can be applied. The answer is 0 0 0 2 1 0 0 0 0
-
 Now, you have {A_square} [A], {B_square} [B], and {C_square} [C] blocks. Provide the count of each block type after applying the above rules.
+Note: Apply the rules at most {max_iterations} times. If the rules cannot be applied anymore, or if you have reached the maximum number of iterations, stop and provide the current counts.
 """
+
+
+DATASET_NAME = "string_synthesis"
 
 
 @dataclass
@@ -130,10 +125,41 @@ class StringSynthesisDataset(ProceduralDataset):
         answer_str = " ".join(str(x) for x in answer)
 
         return {
-            "question": QUESTION_TEMPLATE.format(A_square=A_square, B_square=B_square, C_square=C_square),
+            "question": QUESTION_TEMPLATE.format(
+                A_square=A_square,
+                B_square=B_square,
+                C_square=C_square,
+                max_iterations=self.config.max_iterations,
+            ),
             "answer": answer_str,
-            "metadata": {"states": states, "solution": answer},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "states": states,
+                "solution": answer,
+                "initial_blocks": (A_square, B_square, C_square),
+                "difficulty": {
+                    "initial_blocks": (self.config.min_initial_blocks, self.config.max_initial_blocks),
+                },
+            },
         }
 
 
-register_dataset("string_synthesis", StringSynthesisDataset, StringSynthesisConfig)
+class StringSynthesisCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(StringSynthesisCurriculum.__name__, StringSynthesisConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="initial_blocks",
+                levels=[10, 50, 100, 500],
+                description="Number of initial blocks",
+                lower_field_name="min_initial_blocks",
+                upper_field_name="max_initial_blocks",
+                ensure_interval=True,
+            )
+        )
+
+
+register_dataset(DATASET_NAME, StringSynthesisDataset, StringSynthesisConfig, StringSynthesisCurriculum)

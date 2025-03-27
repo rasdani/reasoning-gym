@@ -5,8 +5,19 @@ from dataclasses import dataclass
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..data import read_data_file
 from ..factory import ProceduralDataset, register_dataset
+
+QUESTION_TEMPLATE = """Solve the following problem.
+
+Provide you answer as a comma-separated list of words with a space after the comma.
+
+Reverse this list of words: {words}
+"""
+
+
+DATASET_NAME = "word_sequence_reversal"
 
 
 @dataclass
@@ -40,19 +51,47 @@ class WordSequenceReversalDataset(ProceduralDataset):
         rng = Random(self.seed + idx)
 
         # Select random words
-        num_words = rng.randint(self.config.min_words, self.config.max_words)
+        num_words = min(
+            rng.randint(self.config.min_words, self.config.max_words),
+            len(self.words),
+        )
         word_indices = rng.sample(range(len(self.words)), num_words)
         words = [self.words[i] for i in word_indices]
 
         # Create question and answer
-        question = ", ".join(words)
+        words_str = ", ".join(words)
         answer = ", ".join(reversed(words))
 
         return {
-            "question": f"Reverse this list of words: {question}",
+            "question": f"{QUESTION_TEMPLATE.format(words=words_str)}",
             "answer": answer,
-            "metadata": {"num_words": num_words, "words": words},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "num_words": num_words,
+                "words": words,
+                "difficulty": {
+                    "words": (self.config.min_words, self.config.max_words),
+                },
+            },
         }
 
 
-register_dataset("word_sequence_reversal", WordSequenceReversalDataset, WordSequenceReversalConfig)
+class WordSequenceReversalCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(WordSequenceReversalCurriculum.__name__, WordSequenceReversalConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="words",
+                levels=[10, 50, 100, 500],
+                description="Number of words in the list",
+                lower_field_name="min_words",
+                upper_field_name="max_words",
+                ensure_interval=True,
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, WordSequenceReversalDataset, WordSequenceReversalConfig, WordSequenceReversalCurriculum)

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 ANIMALS = {
@@ -56,18 +57,10 @@ ANIMALS = {
 
 QUESTION_TEMPLATE = """Your task is to count how many legs there are in total when given a list of animals.
 
-Example:
-- Input: How many legs are there in total if you have 1 duck, 2 deers, 1 spider, 3 cows?
-- Output: 30
-- Explanation:
-    - Ducks have 2 legs each, so 1 duck has 2 legs.
-    - Deers have 4 legs each, so 2 deers have 8 legs.
-    - Spiders have 8 legs each, so 1 spider has 8 legs.
-    - Cows have 4 legs each, so 3 cows have 12 legs.
-    - Therefore, the total number of legs is 2 + 8 + 8 + 12 = 30
-
 Now, how many legs are there in total if you have {animals}?
 """
+
+DATASET_NAME = "leg_counting"
 
 
 @dataclass
@@ -76,6 +69,7 @@ class LegCountingConfig:
 
     min_animals: int = 3  # Minimum number of animals in problem
     max_animals: int = 10  # Maximum number of animals
+    min_instances: int = 1  # Minimum instances of each animal
     max_instances: int = 15  # Maximum instances of each animal
     seed: Optional[int] = None
     size: int = 500  # Virtual dataset size
@@ -84,7 +78,8 @@ class LegCountingConfig:
         """Validate configuration parameters"""
         assert self.min_animals > 0, "min_animals must be positive"
         assert self.max_animals >= self.min_animals, "max_animals must be >= min_animals"
-        assert self.max_instances > 0, "max_instances must be positive"
+        assert self.min_instances > 0, "min_instances must be positive"
+        assert self.max_instances >= self.min_instances, "max_instances must be >= min_instances"
 
 
 class LegCountingDataset(ProceduralDataset):
@@ -101,7 +96,7 @@ class LegCountingDataset(ProceduralDataset):
         # Select random animals
         selected_animals = rng.sample(list(ANIMALS.keys()), num_types)
         for animal in selected_animals:
-            count = rng.randint(1, self.config.max_instances)
+            count = rng.randint(self.config.min_instances, self.config.max_instances)
             animals[animal] = count
 
         return animals
@@ -125,13 +120,40 @@ class LegCountingDataset(ProceduralDataset):
             "question": QUESTION_TEMPLATE.format(animals=", ".join(animal_list)),
             "answer": str(total_legs),
             "metadata": {
-                "difficulty": {
-                    "num_animals": len(animals),
-                },
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "animals": animals,
+                "num_animals": len(animals),
                 "total_legs": total_legs,
+                "difficulty": {
+                    "num_animals": (self.config.min_animals, self.config.max_animals),
+                    "num_instances": (self.config.min_instances, self.config.max_instances),
+                },
             },
         }
 
 
-register_dataset("leg_counting", LegCountingDataset, LegCountingConfig)
+class LegCountingCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(LegCountingCurriculum.__name__, LegCountingConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="num_animals",
+                levels=list(range(1, 20)),
+                description="Number of animals in question",
+                lower_field_name="min_animals",
+                upper_field_name="max_animals",
+            ),
+            RangeAttributeDefinition(
+                name="num_instances",
+                levels=[2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+                description="Number of instances of each animal",
+                lower_field_name="min_instances",
+                upper_field_name="max_instances",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, LegCountingDataset, LegCountingConfig, LegCountingCurriculum)

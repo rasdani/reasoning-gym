@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Solve the Tower of Hanoi problem with {num_disks} disks and {num_pegs} pegs.
@@ -13,17 +14,16 @@ Move all disks from {start_peg} to {target_peg} following the rules:
 - Only one disk can be moved at a time.
 - A larger disk cannot be placed on top of a smaller disk.
 - All disks must be on a peg at all times.
-Example:
-Move disk 1 from Peg 1 to Peg 3
-Move disk 2 from Peg 1 to Peg 2
-Move disk 1 from Peg 3 to Peg 2
 
 Provide the sequence of moves.
+
 Formatting guidelines:
-Each instruction should be placed on a single line.
-Each line should be formatted as 'Move disk X from Peg Y to Peg Z'
-Do not include any other text or formatting.
+- Each instruction should be placed on a single line.
+- Each line should be formatted as 'Move disk X from Peg Y to Peg Z'
+- Do not include any other text or formatting.
 """
+
+DATASET_NAME = "tower_of_hanoi"
 
 
 @dataclass
@@ -269,14 +269,19 @@ class HanoiDataset(ProceduralDataset):
                 start_peg=peg_labels[start_peg],
                 target_peg=peg_labels[target_peg],
             ),
-            "answer": solution,
+            "answer": "\n".join(solution),
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "num_disks": num_disks,
                 "num_pegs": num_pegs,
                 "start_peg": start_peg,
                 "target_peg": target_peg,
                 "auxiliary_pegs": auxiliary_pegs,
                 "solution_length": len(solution),
+                "difficulty": {
+                    "num_disks": (self.min_disks, self.max_disks),
+                },
             },
         }
 
@@ -386,24 +391,14 @@ class HanoiDataset(ProceduralDataset):
         Expected behavior:
             - Correct answer (i.e. equivalent in length, or better, than the one provided in the dataset item) gives 1.0.
             - A correct solution that is suboptimal length gives a proportional reward of optimal_move_count/user_move_count
-            - A badly formatted answer gives a minimal reward (0.01).
             - An answer that is syntactically valid but does not solve the puzzle gives a partial reward (0.05).
-            - An empty string gives 0.01.
-            - None gives 0.0.
+            - A badly formatted or empty answer gives 0.0
         """
-        if answer is None:
+        if not isinstance(answer, str) or len(answer) == 0:
             return 0.0
 
-        if answer == "":
-            return 0.01
-
-        # If answer is a string, split it into lines; if it's already a list, use it directly.
-        if isinstance(answer, str):
-            moves = [line.strip() for line in answer.strip().splitlines() if line.strip()]
-        elif isinstance(answer, list):
-            moves = [line.strip() for line in answer if isinstance(line, str) and line.strip()]
-        else:
-            return 0.0
+        # Spilt answer string it into lines
+        moves = [line.strip() for line in answer.strip().splitlines() if line.strip()]
 
         # Build the initial peg state from metadata.
         metadata = entry["metadata"]
@@ -421,11 +416,11 @@ class HanoiDataset(ProceduralDataset):
             try:
                 disk, from_peg, to_peg = self._parse_move(move)
             except Exception:
-                return 0.01  # Invalid move format
+                return 0.0  # Invalid move format
 
             # Validate the move using existing _validate_move method.
             if not self._validate_move(peg_state, move):
-                return 0.01
+                return 0.0
 
             # Execute the move.
             peg_state[from_peg].pop()
@@ -445,5 +440,20 @@ class HanoiDataset(ProceduralDataset):
             return optimal_moves / user_moves
 
 
+class HanoiCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(HanoiCurriculum.__name__, HanoiConfig)
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="num_disks",
+                levels=[3, 4, 5, 7],
+                min_disks=3,
+                lower_field_name="min_disks",
+                upper_field_name="max_disks",
+                description="Number of disks in the puzzle",
+            ),
+        )
+
+
 # Register the dataset
-register_dataset("tower_of_hanoi", HanoiDataset, HanoiConfig)
+register_dataset(DATASET_NAME, HanoiDataset, HanoiConfig, HanoiCurriculum)

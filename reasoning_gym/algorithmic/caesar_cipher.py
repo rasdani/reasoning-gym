@@ -4,9 +4,11 @@ from dataclasses import dataclass
 from random import Random
 from typing import Optional
 
-from reasoning_gym.data import read_data_file
-
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
+from ..data import read_data_file
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "caesar_cipher"
 
 
 @dataclass
@@ -67,6 +69,7 @@ class CaesarCipherDataset(ProceduralDataset):
 
         # Select random sentence and rotation
         sentence = rng.choice(self.valid_sentences)
+        num_words = len(sentence.split())
         rotation = rng.randint(self.config.min_rotation, self.config.max_rotation)
 
         # Generate cipher text
@@ -75,8 +78,43 @@ class CaesarCipherDataset(ProceduralDataset):
         return {
             "question": f"Decrypt this Caesar cipher text: {cipher_text}. Provide only the decrypted text as your final answer.",
             "answer": sentence,
-            "metadata": {"rotation": rotation, "cipher_text": cipher_text, "clear_text": sentence},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "rotation": rotation,
+                "cipher_text": cipher_text,
+                "clear_text": sentence,
+                "num_words": num_words,
+                "difficulty": {
+                    "words": (self.config.min_words, self.config.max_words),
+                    "rotation": (self.config.min_rotation, self.config.max_rotation),
+                },
+            },
         }
 
 
-register_dataset("caesar_cipher", CaesarCipherDataset, CaesarCipherConfig)
+class CaesarCipherCurriculum(BaseCurriculum):
+    """Curriculum for Caesar cipher task generation"""
+
+    def __init__(self):
+        super().__init__(CaesarCipherCurriculum.__name__, CaesarCipherConfig)
+
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="rotation",
+                levels=[5, 10, 15, 25],
+                description="Max rotation for cipher",
+                lower_field_name="min_rotation",
+                upper_field_name="max_rotation",
+            ),
+            RangeAttributeDefinition(
+                name="words",
+                levels=[5, 10, 15, 25],
+                description="Max number of words",
+                lower_field_name="min_words",
+                upper_field_name="max_words",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, CaesarCipherDataset, CaesarCipherConfig, CaesarCipherCurriculum)

@@ -2,7 +2,11 @@
 
 import pytest
 
-from reasoning_gym.algorithmic.string_insertion import StringInsertionConfig, StringInsertionDataset
+from reasoning_gym.algorithmic.string_insertion import (
+    StringInsertionConfig,
+    StringInsertionCurriculum,
+    StringInsertionDataset,
+)
 
 
 def test_string_insertion_config_validation():
@@ -101,4 +105,25 @@ def test_string_insertion_answer():
     # Test score_answer with correct answer as python list of characters (partial correct)
     answer = "['A', 'A', 'B', 'C', 'D', 'A', 'E', 'E', 'E', 'E', 'E', 'E', 'E', 'B', 'C', 'D', 'E', 'B', 'A', 'A', 'A', 'A', 'A']"
     entry = {"answer": "AABCDAEEEEEEEBCDEBAAAAA"}
-    assert dataset.score_answer(answer, entry) == 0.5
+    assert dataset.score_answer(answer, entry) == 0.1
+
+
+def test_string_insertion_curriculum():
+    curriculum = StringInsertionCurriculum()
+
+    base_value = {"size": 150, "seed": 1}
+
+    base_cfg: StringInsertionConfig = curriculum.generate_configuration(base_value)
+    assert base_cfg.seed == 1
+    assert base_cfg.size == 150
+    assert base_cfg.min_string_length == 10 and base_cfg.max_string_length == 50
+
+    # test incrementing attribute levels
+    curriculum.increment_attr_level("string_length")
+    increased_cfg = curriculum.generate_configuration(base_value)
+    assert increased_cfg.min_string_length == 10 and increased_cfg.max_string_length == 100
+
+    # test decrementing attribute level for string_length again
+    curriculum.decrement_attr_level("string_length")
+    partially_decreased_cfg = curriculum.generate_configuration(base_value)
+    assert partially_decreased_cfg.min_string_length == 10 and partially_decreased_cfg.max_string_length == 50

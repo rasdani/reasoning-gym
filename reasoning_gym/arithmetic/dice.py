@@ -4,7 +4,10 @@ from math import gcd
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "dice"
 
 
 def compute_probability(dice, target):
@@ -74,14 +77,14 @@ def generate_puzzle(num_dice, max_dice_size, rng):
     high_target = min_total + 2 * (max_total - min_total) // 3
     target = rng.randint(low_target, high_target)
 
-    # Compute probability.
-    (num, den), prob = compute_probability(dice, target)
+    # Compute probability. Don't change this.
+    (num, den), probability = compute_probability(dice, target)
 
     # Create a string representing the dice, e.g., "1d20, 1d17, 1d6" etc.
     dice_str = ", ".join(f"1d{s}" for s in dice)
 
     # Return the puzzle.
-    return {"dice_str": dice_str, "target": target, "num": num, "den": den}
+    return {"dice_str": dice_str, "target": target, "num": num, "den": den, "probability": probability}
 
 
 @dataclass
@@ -122,7 +125,15 @@ class DiceDataset(ProceduralDataset):
         return {
             "question": puzzle_str,
             "answer": answer_str,
-            "metadata": {},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "puzzle": puzzle,
+                "difficulty": {
+                    "num_dice": self.config.num_dice,
+                    "max_dice_size": self.config.max_dice_size,
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
@@ -138,12 +149,33 @@ class DiceDataset(ProceduralDataset):
             float: The computed score between 0.0 and 1.0.
         """
 
-        if answer == None:
-            return 0.0
-        if answer.lower().replace("\n", "") != entry["answer"].lower().replace("\n", ""):
-            return 0.01
-        else:
-            return 1.0  # Yay
+        if isinstance(answer, str):
+            if answer.lower().replace("\n", "") == entry["answer"].lower().replace("\n", ""):
+                return 1.0  # Yay
+
+        return 0.0
 
 
-register_dataset("dice", DiceDataset, DiceConfig)
+class DiceCurriculum(BaseCurriculum):
+    """Curriculum for dice puzzle generation"""
+
+    def __init__(self):
+        super().__init__(DiceCurriculum.__name__, DiceConfig)
+
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="num_dice",
+                levels=[4, 5, 6, 7],
+                description="Number of dice to roll",
+                field_name="num_dice",
+            ),
+            ScalarAttributeDefinition(
+                name="max_dice_size",
+                levels=[20, 25, 30, 35],
+                description="Maximum number of sides on any die",
+                field_name="max_dice_size",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, DiceDataset, DiceConfig, DiceCurriculum)

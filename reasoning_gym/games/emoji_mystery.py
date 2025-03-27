@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..data import read_data_file
 from ..factory import ProceduralDataset, register_dataset
 
@@ -118,8 +119,8 @@ _EMOJIS = [
     "🤍",
 ]
 
-
-hint_function = """
+# Keep the hint function in a separate variable to control the visibility of the hint
+hint_function = """Here is a hint:
 ```python
 def variance_selector_to_byte(variation_selector):
     variation_selector_codepoint = ord(variation_selector)
@@ -129,6 +130,7 @@ def variance_selector_to_byte(variation_selector):
         return variation_selector_codepoint - 0xE0100 + 16
     else:
         return None
+
 def decode(encoded_sentence):
     decoded_bytes = []
     variation_selectors_part = encoded_sentence[1:]
@@ -141,14 +143,16 @@ def decode(encoded_sentence):
 """
 
 
-QUESTION_TEMPLATE = "\n".join(
-    [
-        "The following emoji is encoded with a sentence.",
-        "Decode the following sentence from the emoji: {sentence}",
-        "Here is a hint: {hint_function}",
-        "Return the secret sentence as your final answer.",
-    ]
-)
+QUESTION_TEMPLATE = """The following emoji is encoded with a sentence.
+
+Decode the following sentence from the emoji: {sentence}
+
+{hint_function}
+
+Return the secret sentence as your final answer.
+"""
+
+DATASET_NAME = "emoji_mystery"
 
 
 @dataclass
@@ -187,7 +191,19 @@ class EmojiMysteryDataset(ProceduralDataset):
         secret_sentence = rng.choice(self.sentences).strip().replace("\n", " ")
         encoded_sentence = self.encode(secret_sentence, secret_emoji)
         question = QUESTION_TEMPLATE.format(sentence=encoded_sentence, hint_function=hint_function)
-        return {"question": question, "answer": secret_sentence, "metadata": {"emoji": secret_emoji}}
+        return {
+            "question": question,
+            "answer": secret_sentence,
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "emoji": secret_emoji,
+                "num_words_in_sentence": len(re.findall(r"\b\w+\b", secret_sentence)),
+                "difficulty": {
+                    "num_words_in_sentence": (self.config.min_words_in_sentence, self.config.max_words_in_sentence),
+                },
+            },
+        }
 
     def variance_selector_to_byte(self, variation_selector: str) -> Optional[int]:
         variation_selector_codepoint = ord(variation_selector)
@@ -232,4 +248,19 @@ class EmojiMysteryDataset(ProceduralDataset):
         return reward
 
 
-register_dataset("emoji_mystery", EmojiMysteryDataset, EmojiMysteryConfig)
+class EmojiMysteryCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(EmojiMysteryCurriculum.__name__, EmojiMysteryConfig)
+
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="num_words_in_sentence",
+                levels=[3, 10, 20, 35],
+                description="Number of words in the sentence",
+                lower_field_name="min_words_in_sentence",
+                upper_field_name="max_words_in_sentence",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, EmojiMysteryDataset, EmojiMysteryConfig, EmojiMysteryCurriculum)

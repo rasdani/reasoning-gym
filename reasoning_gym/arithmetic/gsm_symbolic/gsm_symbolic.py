@@ -1,10 +1,13 @@
 """GSM Symblic dataset generator"""
 
+import re
 from dataclasses import dataclass
 from random import Random
 from typing import Any, Callable, Optional
 
 from reasoning_gym.factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "gsm_symbolic"
 
 tasks_ok = [
     0,
@@ -149,8 +152,30 @@ class GSMSymbolicDataset(ProceduralDataset):
         generator_idx = self.task_indices[idx]
         generator = self.generators[generator_idx]
         example = generator(rng, self.config.difficulty)
-        example["question"] += " Give only the result as your final answer."
+        example["question"] += " Give the result as your final answer. Do not include units."
+        example["metadata"]["source_dataset"] = DATASET_NAME
+        example["metadata"]["source_index"] = idx
         return example
 
+    def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
+        reward = 0.0
+        if answer is None:
+            return reward
+        try:
+            # Extract number using regex with search
+            match = re.search(r"\b-?\d+(?:\.\d+)?\b", answer)
+            if not match:
+                return reward
 
-register_dataset("gsm_symbolic", GSMSymbolicDataset, GSMSymbolicDatasetConfig)
+            answer_value = float(match.group(0))
+            expected_answer = float(entry["answer"])
+            if answer_value == expected_answer:
+                reward = 1.0
+            else:
+                reward = 0.01
+        except Exception:
+            return reward
+        return reward
+
+
+register_dataset(DATASET_NAME, GSMSymbolicDataset, GSMSymbolicDatasetConfig)

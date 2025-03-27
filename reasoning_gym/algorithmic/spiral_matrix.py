@@ -8,33 +8,33 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Given a matrix, your job is to generate a list of elements in spiral order, starting from the top-left element.
 
-Example:
-- Input: For the matrix below, what is the list of elements in spiral order?
-1 2 3
-4 5 6
-7 8 9
-- Output: 1 2 3 6 9 8 7 4 5
-- Explanation:
-    - We start from the top-left element (1) and move right until we reach the end of the row: 1 2 3
-    - Then, we move down until we reach the last column: 1 2 3 6 9
-    - Next, we move left until we reach the first column: 1 2 3 6 9 8 7
-    - Then, we move up until we reach the second row (i.e. one below the previously traversed row): 1 2 3 6 9 8 7 4
-    - Finally, we move right until we reach the second to last column: 1 2 3 6 9 8 7 4 5
-    - The output format is a space-separated list of elements in spiral order (as opposed to a python list)
+The spiral order is clockwise, starting from the top-left corner. More precisely:
+- Start from the top-left corner and move right.
+- Move down towards the bottom-right corner.
+- Move left towards the bottom-left corner.
+- Move up towards the top-right corner.
+- Repeat the steps for the inner elements of the matrix until every entry is visited.
+
+Your output should be a space-separated list of integers, e.g. 1 2 3 4 5 6
 
 For the matrix below, what is the list of elements in spiral order?
 {matrix}
 """
 
 
+DATASET_NAME = "spiral_matrix"
+
+
 @dataclass
 class SpiralMatrixConfig:
     """Configuration for Spiral Matrix dataset generation"""
 
+    min_n: int = 2  # Minimum number of rows/cols in the matrix
     max_n: int = 10  # Maximum number of rows/cols in the matrix
 
     size: int = 500  # Virtual dataset size
@@ -42,7 +42,7 @@ class SpiralMatrixConfig:
 
     def validate(self):
         """Validate configuration parameters"""
-        assert 2 <= self.max_n, "max_n must be at least 2"
+        assert 2 <= self.min_n <= self.max_n, "min_n must be between 2 and max_n"
 
 
 class SpiralMatrixDataset(ProceduralDataset):
@@ -51,9 +51,8 @@ class SpiralMatrixDataset(ProceduralDataset):
     def __init__(self, config: SpiralMatrixConfig):
         super().__init__(config=config, seed=config.seed, size=config.size)
 
-    def _get_matrix(self, rng: Random) -> list[list[int]]:
+    def _get_matrix(self, rng: Random, n: int) -> list[list[int]]:
         """Generate a random matrix"""
-        n = rng.randint(2, self.config.max_n)
         numbers = [rng.randint(0, 9) for _ in range(n**2)]
         rng.shuffle(numbers)
         matrix = [numbers[i * n : (i + 1) * n] for i in range(n)]
@@ -105,7 +104,8 @@ class SpiralMatrixDataset(ProceduralDataset):
         """Generate a single Spiral Matrix question"""
         rng = Random(self.seed + idx)
 
-        matrix = self._get_matrix(rng)
+        n = rng.randint(self.config.min_n, self.config.max_n)
+        matrix = self._get_matrix(rng, n)
         matrix_str = self._matrix_to_str(matrix)
         answer = self._get_spiral(matrix)
         answer_str = self._list_to_str(answer)
@@ -113,7 +113,16 @@ class SpiralMatrixDataset(ProceduralDataset):
         return {
             "question": QUESTION_TEMPLATE.format(matrix=matrix_str),
             "answer": answer_str,
-            "metadata": {"matrix": matrix, "solution": answer},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "matrix": matrix,
+                "solution": answer,
+                "n": n,
+                "difficulty": {
+                    "n": (self.config.min_n, self.config.max_n),
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
@@ -131,13 +140,27 @@ class SpiralMatrixDataset(ProceduralDataset):
             try:
                 answer = " ".join(str(item) for item in eval(answer))
                 if answer == oracle_answer:
-                    return 0.5
-                else:
-                    return 0.01
-            except Exception as e:
-                return 0.01
+                    return 0.1
+            except Exception:
+                pass
 
         return 0.0
 
 
-register_dataset("spiral_matrix", SpiralMatrixDataset, SpiralMatrixConfig)
+class SpiralMatrixCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(SpiralMatrixCurriculum.__name__, SpiralMatrixConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="n",
+                levels=[10, 25, 50, 100],
+                description="Number of rows/cols in the matrix",
+                lower_field_name="min_n",
+                upper_field_name="max_n",
+            )
+        )
+
+
+register_dataset(DATASET_NAME, SpiralMatrixDataset, SpiralMatrixConfig, SpiralMatrixCurriculum)

@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Literal, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "basic_arithmetic"
 
 
 @dataclass
@@ -94,9 +97,15 @@ class BasicArithmeticDataset(ProceduralDataset):
             "question": question,
             "answer": str(result),
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "expression": expression,
                 "num_terms": num_terms,
                 "num_digits": num_digits,
-                "expression": expression,
+                "difficulty": {
+                    "num_terms": (self.config.min_terms, self.config.max_terms),
+                    "num_digits": (self.config.min_digits, self.config.max_digits),
+                },
             },
         }
 
@@ -233,5 +242,26 @@ class BasicArithmeticDataset(ProceduralDataset):
             return template.format(expression)
 
 
+class BasicArithmeticCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(name=BasicArithmeticCurriculum.__name__, config_cls=BasicArithmeticDatasetConfig)
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="num_terms",
+                levels=[2, 5, 10, 20],
+                description="Number of terms in the expression",
+                lower_field_name="min_terms",
+                upper_field_name="max_terms",
+            ),
+            RangeAttributeDefinition(
+                name="num_digits",
+                levels=[1, 2, 5, 10],
+                description="Number of digits in the numbers",
+                lower_field_name="min_digits",
+                upper_field_name="max_digits",
+            ),
+        )
+
+
 # Register the dataset
-register_dataset("basic_arithmetic", BasicArithmeticDataset, BasicArithmeticDatasetConfig)
+register_dataset(DATASET_NAME, BasicArithmeticDataset, BasicArithmeticDatasetConfig, BasicArithmeticCurriculum)

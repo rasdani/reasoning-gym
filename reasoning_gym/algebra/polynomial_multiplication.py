@@ -5,7 +5,10 @@ from typing import Any, Optional
 import sympy as sp
 from sympy.polys.monomials import itermonomials
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "polynomial_multiplication"
 
 
 @dataclass
@@ -69,9 +72,9 @@ class PolynomialMultiplicationDataset(ProceduralDataset):
             "Calculate the following: {polynomial_expr}",
         ]
         self.added_instruction = """
-In addition, When doing calculation, Use the following instructions together with your mathematical ingenuity to solve the integral problems
-## 1. Use ** instead ^ to represent powers. For example 7*X**2 instead of 7*X^2.
-## 2. Always use * when doing all sorts of multiplcation in your reasoning steps and even in reporting answers.
+When performing calculations, please follow these guidelines:
+1. Use ** instead of ^ to represent exponents. For example, write 7*X**2 instead of 7*X^2.
+2. Always include the * symbol for all multiplication operations in your reasoning steps. For example, write `-3*X**3*sin(X) - 9*X**2*cos(X) + 18*X*sin(X) + 18*cos(X) + C` instead of `-3x3sin(x) - 9x2cos(x) + 18xsin(x) + 18cos(x) + C`.
 """
         super().__init__(config=config, seed=config.seed, size=config.size)
 
@@ -106,11 +109,22 @@ In addition, When doing calculation, Use the following instructions together wit
 
         return {
             "question": question,
-            "answer": product,
+            "answer": str(product),
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "polynomial_expr": str(polynomial_expr),
-                "result": str(product),
                 "variables": list(product.free_symbols),
+                "difficulty": {
+                    "min_terms": self.config.min_terms,
+                    "max_terms": self.config.max_terms,
+                    "min_value": self.config.min_value,
+                    "max_value": self.config.max_value,
+                    "min_degree": self.config.min_degree,
+                    "max_degree": self.config.max_degree,
+                    "min_polynomials": self.config.min_polynomials,
+                    "max_polynomials": self.config.max_polynomials,
+                },
             },
         }
 
@@ -147,22 +161,81 @@ In addition, When doing calculation, Use the following instructions together wit
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
         reward = 0.0
-        metadata = entry["metadata"]
         if answer is not None:
             try:
                 predicted_poly = sp.parse_expr(answer)
-                target_poly = sp.parse_expr(metadata["result"])
+                target_poly = sp.parse_expr(entry["answer"])
 
                 # Check if the difference simplifies to zero (i.e. they are equivalent).
                 if predicted_poly == target_poly:
                     reward = 1.0
-                elif answer.strip():
-                    reward = 0.05
-                else:
-                    reward = 0.01
             except Exception:
-                reward = 0.01
+                reward = 0.0
         return reward
 
 
-register_dataset("polynomial_multiplication", PolynomialMultiplicationDataset, PolynomialMultiplicationConfig)
+class PolynomialMultiplicationCurriculum(BaseCurriculum):
+    """Curriculum for complex number arithmetic problems."""
+
+    def __init__(self):
+        super().__init__(PolynomialMultiplicationCurriculum.__name__, PolynomialMultiplicationConfig)
+
+        # Define attributes
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="min_terms",
+                field_name="min_terms",
+                levels=[2, 4, 6, 8],
+                description="Minimum number of terms in polynomial expressions",
+            ),
+            ScalarAttributeDefinition(
+                name="max_terms",
+                field_name="max_terms",
+                levels=[4, 8, 12, 16],
+                description="Maximum number of terms in polynomial expressions",
+            ),
+            ScalarAttributeDefinition(
+                name="min_value",
+                field_name="min_value",
+                levels=[1, 10, 100, 1000],
+                description="Minimum value for coefficients",
+            ),
+            ScalarAttributeDefinition(
+                name="max_value",
+                field_name="max_value",
+                levels=[100, 10000, 1000000, 100000000],
+                description="Maximum value for coefficients",
+            ),
+            ScalarAttributeDefinition(
+                name="min_degree",
+                field_name="min_degree",
+                levels=[0, 1, 2, 3],
+                description="Minimum polynomial degree",
+            ),
+            ScalarAttributeDefinition(
+                name="max_degree",
+                field_name="max_degree",
+                levels=[2, 4, 8, 10],
+                description="Maximum polynomial degree",
+            ),
+            ScalarAttributeDefinition(
+                name="min_polynomials",
+                field_name="min_polynomials",
+                levels=[2, 3, 4, 5],
+                description="Minimum number of polynomials being multiplied",
+            ),
+            ScalarAttributeDefinition(
+                name="max_polynomials",
+                field_name="max_polynomials",
+                levels=[4, 6, 8, 10],
+                description="Maximum number of polynomials being multiplied",
+            ),
+        )
+
+
+register_dataset(
+    DATASET_NAME,
+    PolynomialMultiplicationDataset,
+    PolynomialMultiplicationConfig,
+    PolynomialMultiplicationCurriculum,
+)

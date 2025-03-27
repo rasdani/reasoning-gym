@@ -2,7 +2,7 @@
 
 import pytest
 
-from reasoning_gym.algorithmic.count_primes import CountPrimesConfig, CountPrimesDataset
+from reasoning_gym.algorithmic.count_primes import CountPrimesConfig, CountPrimesCurriculum, CountPrimesDataset
 
 
 def test_count_primes_config_validation():
@@ -86,3 +86,34 @@ def test_count_primes_answer():
     assert primes[8] == False
     assert primes[9] == False
     assert primes[10] == False
+
+
+def test_count_primes_list():
+    """Test that list of primes was correctly generated"""
+    config = CountPrimesConfig(max_n=100, size=100, seed=42)
+    dataset = CountPrimesDataset(config)
+
+    for item in dataset:
+        start = item["metadata"]["start"]
+        end = item["metadata"]["end"]
+        primes = item["metadata"]["primes"]
+        for p in primes:
+            assert p >= start
+            assert p <= end
+            assert dataset.primes[p] == True
+
+
+def test_shortest_path_curriculum():
+    curriculum = CountPrimesCurriculum()
+
+    base_value = {"size": 150, "seed": 1}
+
+    base_cfg: CountPrimesConfig = curriculum.generate_configuration(base_value)
+    assert base_cfg.seed == 1
+    assert base_cfg.size == 150
+    assert base_cfg.min_n == 1000 and base_cfg.max_n == 1000
+
+    # test incrementing attribute levels
+    curriculum.increment_attr_level("n")
+    increased_cfg = curriculum.generate_configuration(base_value)
+    assert increased_cfg.min_n == 1000 and increased_cfg.max_n == 10000

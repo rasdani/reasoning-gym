@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "bitwise_arithmetic"
 
 
 @dataclass
@@ -147,11 +150,20 @@ class BitwiseArithmeticDataset(ProceduralDataset):
             self.config.difficulty,
         )
         problem_str = (
-            f"Please solve this problem. Assume there is arbitrary bit depth and that there are signed integers. Reply only with the final hexidecimal value.\n"
+            f"Please solve this problem. Assume there is arbitrary bit depth and that there are signed integers. If the answer is negative, reply as a negative value (ex., -0x3), not the two's-compliment form. Reply only with the final hexidecimal value.\n"
             + problem
         )
 
-        return {"question": problem_str, "answer": answer, "metadata": {"problem": problem}}
+        return {
+            "question": problem_str,
+            "answer": answer,
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "problem": problem,
+                "difficulty": {"difficulty": self.config.difficulty},
+            },
+        }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
         """
@@ -160,18 +172,32 @@ class BitwiseArithmeticDataset(ProceduralDataset):
         Returns:
             float: 1.0 if the user's answer is correct; otherwise, 0.01 unless no answer is provided, in which case 0.
         """
-        if answer is None:
-            return 0.0
+        if isinstance(answer, str):
+            try:
+                solved = verify_solution(entry["metadata"]["problem"], answer)
+                if solved:
+                    return 1.0
+            except Exception:
+                pass
 
-        try:
-            solved = verify_solution(entry["metadata"]["problem"], answer)
-            if solved:
-                return 1.0
-        except Exception:
-            return 0.01
+        return 0.0
 
-        return 0.01
+
+class BitwiseArithmeticCurriculum(BaseCurriculum):
+    """Curriculum for Bitwise Arithmetic dataset"""
+
+    def __init__(self):
+        super().__init__(BitwiseArithmeticCurriculum.__name__, BitwiseArithmeticConfig)
+
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="difficulty",
+                levels=[1, 2, 3, 4],
+                description="Range of difficulty levels",
+                field_name="difficulty",
+            ),
+        )
 
 
 # Register the dataset with the factory.
-register_dataset("bitwise_arithmetic", BitwiseArithmeticDataset, BitwiseArithmeticConfig)
+register_dataset(DATASET_NAME, BitwiseArithmeticDataset, BitwiseArithmeticConfig, BitwiseArithmeticCurriculum)

@@ -3,7 +3,11 @@ from pytest import approx
 from sympy import Symbol, sympify
 
 from reasoning_gym import create_dataset
-from reasoning_gym.algebra.polynomial_equations import PolynomialEquationsConfig, PolynomialEquationsDataset
+from reasoning_gym.algebra.polynomial_equations import (
+    PolynomialEquationsConfig,
+    PolynomialEquationsCurriculum,
+    PolynomialEquationsDataset,
+)
 
 
 def test_polynomial_config_validation():
@@ -122,11 +126,11 @@ def test_polynomial_solutions_evaluation():
     "oracle_answer, predicted_answer, expected_reward",
     [
         ("4,-4.12", "4,-4.12", 1.0),  # Exact match
-        ("4,-4.12", "4.0001,-4.120001", approx(0.9999, rel=1e-3)),  # Very close match
-        ("4,-4.12", "4.1,-4.2", approx(0.9139, rel=1e-3)),
-        ("4,8", "4", approx(0.9, rel=1e-3)),  # Missing an oracle solution -> missing solution penalty applies
-        ("4", "4,8", approx(0.95, rel=1e-3)),  # extra solution -> extra solution penalty
-        ("-1,-2", "1,4", approx(0.06890, rel=1e-3)),  # -1 matched w/ 1 and -2 matched w/ 4
+        ("4,-4.12", "4.0001,-4.120001", approx(0.9994, rel=1e-3)),  # Very close match
+        ("4,-4.12", "4.1,-4.2", approx(0.4086, rel=1e-3)),
+        ("4,8", "4", approx(0.5, rel=1e-3)),  # Missing an oracle solution -> missing solution penalty applies
+        ("4", "4,8", approx(0.5, rel=1e-3)),  # extra solution -> extra solution penalty
+        ("-1,-2", "1,4", approx(1.0305e-9, rel=1e-3)),  # -1 matched w/ 1 and -2 matched w/ 4
         ("", "1", approx(0, rel=1e-4)),  # oracle no solution, predicted extra solution
         ("1", "", approx(0, rel=1e-4)),  # oracle has a solution, predicted no solution
     ],
@@ -147,3 +151,27 @@ def test_polynomial_perfect_score():
 
     for item in ds:
         assert ds.score_answer(item["answer"], item) == 1.0
+
+
+def test_polynomial_equations_curriculum():
+    curriculum = PolynomialEquationsCurriculum()
+
+    base_value = {"size": 150, "seed": 1}
+
+    base_cfg: PolynomialEquationsConfig = curriculum.generate_configuration(base_value)
+    assert base_cfg.seed == 1
+    assert base_cfg.size == 150
+    # Check default values for degree attribute
+    assert base_cfg.min_degree == 1 and base_cfg.max_degree == 1
+    # Check default values for terms attribute
+    assert base_cfg.min_terms == 2 and base_cfg.max_terms == 2
+
+    # Test incrementing attribute levels
+    curriculum.increment_attr_level("degree")
+    curriculum.increment_attr_level("terms")
+
+    increased_cfg = curriculum.generate_configuration(base_value)
+    # Check increased values for degree attribute
+    assert increased_cfg.min_degree == 1 and increased_cfg.max_degree == 2
+    # Check increased values for terms attribute
+    assert increased_cfg.min_terms == 2 and increased_cfg.max_terms == 3

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Given a string, partition it such that every substring is a palindrome.
@@ -18,16 +19,12 @@ A palindrome is a word that reads the same backward as forward.
 
 You may return all possible palindrome partitioning in any order.
 
-Example:
-- Input: Partition the following string into palindromes: aab
-- Output: [["a","a","b"],["aa","b"]]
-- Explanation:
-    - One way to partition the string is "a" | "a" | "b", where each substring is a palindrome.
-    - Another way to partition the string is "aa" | "b", where again each substring is a palindrome.
-    - Therefore, the final result is a list of the two palindrome partitions.
+Your output should be a list of lists, where each list represents a palindrome partition, e.g. [["a","a","b"],["aa","b"]].
 
 Partition the following string into palindromes: {string}
 """
+
+DATASET_NAME = "palindrome_partitioning"
 
 
 @dataclass
@@ -36,7 +33,8 @@ class PalindromePartitioningConfig:
 
     min_string_len: int = 5
     max_string_len: int = 15
-    max_substring_palindome_len: int = 5
+    min_substring_palindrome_len: int = 1
+    max_substring_palindrome_len: int = 5
 
     size: int = 500  # Virtual dataset size
     seed: Optional[int] = None
@@ -45,9 +43,12 @@ class PalindromePartitioningConfig:
         """Validate configuration parameters"""
         assert 1 <= self.min_string_len, "Minimum string length must be at least 1"
         assert self.min_string_len <= self.max_string_len, "Minimum string length must be less than or equal to maximum"
-        assert 1 <= self.max_substring_palindome_len, "Maximum substring palindrome length must be at least 1"
+        assert 1 <= self.min_substring_palindrome_len, "Minimum substring palindrome length must be at least 1"
         assert (
-            self.max_substring_palindome_len <= self.max_string_len
+            self.min_substring_palindrome_len <= self.max_substring_palindrome_len
+        ), "Minimum substring palindrome length must be less than or equal to maximum"
+        assert (
+            self.max_substring_palindrome_len <= self.max_string_len
         ), "Maximum substring palindrome length must be less than or equal to maximum string length"
 
 
@@ -101,9 +102,8 @@ class PalindromePartitioningDataset(ProceduralDataset):
                 oracle = self.to_set_of_tuples(entry["metadata"]["solution"])
                 if answer == oracle:
                     return 1.0
-                return 0.01
             except Exception:
-                return 0.0
+                pass
         return 0.0
 
     def _generate_palindrome_letters(self, rng: Random, length: int) -> list[str]:
@@ -115,30 +115,73 @@ class PalindromePartitioningDataset(ProceduralDataset):
             return letters + [middle_letter] + letters[::-1]
         return letters + letters[::-1]
 
-    def _get_string(self, rng: Random) -> str:
+    def _get_string(self, rng: Random, string_len: int) -> str:
         """Generate a random string"""
-        size = rng.randint(self.config.min_string_len, self.config.max_string_len)
         output = ""
-
-        while len(output) < size:
-            palindrome_len = rng.randint(1, min(self.config.max_substring_palindome_len, size - len(output)))
+        while len(output) < string_len:
+            palindrome_len = min(
+                string_len - len(output),
+                rng.randint(self.config.min_substring_palindrome_len, self.config.max_substring_palindrome_len),
+            )
             substring = "".join(self._generate_palindrome_letters(rng, palindrome_len))
             output += substring
-
         return output
 
     def __getitem__(self, idx: int) -> dict:
         """Generate a single Palindrome Partitioning question"""
         rng = Random(self.seed + idx)
-        string = self._get_string(rng)
+
+        string_len = rng.randint(self.config.min_string_len, self.config.max_string_len)
+        string = self._get_string(rng, string_len)
         answer = self._palindrome_partitioning(string)
         answer_str = json.dumps(answer)
 
         return {
             "question": QUESTION_TEMPLATE.format(string=string),
             "answer": answer_str,
-            "metadata": {"string": string, "solution": answer},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "string": string,
+                "solution": answer,
+                "string_len": string_len,
+                "difficulty": {
+                    "string_len": (self.config.min_string_len, self.config.max_string_len),
+                    "substring_palindrome_len": (
+                        self.config.min_substring_palindrome_len,
+                        self.config.max_substring_palindrome_len,
+                    ),
+                },
+            },
         }
 
 
-register_dataset("palindrome_partitioning", PalindromePartitioningDataset, PalindromePartitioningConfig)
+class PalindromePartitioningCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(PalindromePartitioningCurriculum.__name__, PalindromePartitioningConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="string_len",
+                levels=[10, 100, 500, 1000],
+                description="Length of the string",
+                lower_field_name="min_string_len",
+                upper_field_name="max_string_len",
+            ),
+            RangeAttributeDefinition(
+                name="substring_palindrome_len",
+                levels=[5, 10, 50, 100],
+                description="Length of the substring palindrome",
+                lower_field_name="min_substring_palindrome_len",
+                upper_field_name="max_substring_palindrome_len",
+            ),
+        )
+
+
+register_dataset(
+    DATASET_NAME,
+    PalindromePartitioningDataset,
+    PalindromePartitioningConfig,
+    PalindromePartitioningCurriculum,
+)

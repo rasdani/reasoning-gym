@@ -6,7 +6,10 @@ from enum import StrEnum
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "propositional_logic"
 
 
 def parse_expr(expr: str):
@@ -62,22 +65,21 @@ class Operator(StrEnum):
     IFF = "↔"
 
 
-QUESTION_FORMAT = "\n".join(
-    [
-        "The following question is a propositional logic reasoning question.",
-        "In the question we provide a list of premises",
-        "The task is to infer a correct conclusion from the premise.",
-        "FORMAT INSTRUCTIONS:",
-        "Return the conclusion logic statement, as your final answer.",
-        "Use the following notation to denote symbols",
-        "OR = \u2228",
-        "AND = \u2227",
-        "IMPLIES = \u2192",
-        "IFF = \u2194",
-        "NOT = \u00ac",
-        "Here is the question:",
-    ]
-)
+QUESTION_FORMAT = """The following question is a propositional logic reasoning question.
+
+In the question we provide a list of premises. The task is to infer a correct conclusion from the premise.
+
+FORMAT INSTRUCTIONS:
+- Return the conclusion logic statement, as your final answer.
+- Use the following notation to denote symbols
+    - OR = \u2228
+    - AND = \u2227
+    - IMPLIES = \u2192
+    - IFF = \u2194
+    - NOT = \u00ac
+
+Here is the question:
+"""
 
 
 @dataclass
@@ -88,6 +90,7 @@ class PropositionalLogicConfig:
     max_vars: int = 4  # Maximum number of variables
     min_statements: int = 2  # Minimum number of given statements
     max_statements: int = 4  # Maximum number of statements
+    min_complexity: int = 1  # Minimum operator depth
     max_complexity: int = 3  # Maximum operator depth
     seed: Optional[int] = None
     size: int = 500  # Virtual dataset size
@@ -97,8 +100,9 @@ class PropositionalLogicConfig:
         assert self.min_vars > 0, "min_vars must be positive"
         assert self.max_vars >= self.min_vars, "max_vars must be >= min_vars"
         assert self.min_statements > 0, "min_statements must be positive"
-        assert self.max_statements >= self.min_statements
-        assert self.max_complexity > 0, "max_complexity must be positive"
+        assert self.max_statements >= self.min_statements, "max_statements must be >= min_statements"
+        assert self.min_complexity > 0, "min_complexity must be positive"
+        assert self.max_complexity >= self.min_complexity, "max_complexity must be >= min_complexity"
 
 
 class Expression:
@@ -214,10 +218,17 @@ class PropositionalLogicDataset(ProceduralDataset):
             "question": question,
             "answer": None,
             "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
                 "premises": [str(p) for p in premises],
                 "variables": variables,
                 "complexity": self._measure_complexity(conclusion),
                 "example_answer": str(conclusion),
+                "difficulty": {
+                    "vars": (self.config.min_vars, self.config.max_vars),
+                    "statements": (self.config.min_statements, self.config.max_statements),
+                    "complexity": (self.config.min_complexity, self.config.max_complexity),
+                },
             },
         }
 
@@ -225,7 +236,7 @@ class PropositionalLogicDataset(ProceduralDataset):
         """Generate a list of premise statements"""
         premises = []
         for _ in range(num_statements):
-            depth = rng.randint(1, self.config.max_complexity)
+            depth = rng.randint(self.config.min_complexity, self.config.max_complexity)
             premises.append(self._generate_expression(rng, variables, depth))
         return premises
 
@@ -296,7 +307,7 @@ class PropositionalLogicDataset(ProceduralDataset):
 
     def score_answer(self, answer: str | None, entry: dict[str, Any]) -> float:
         """Robust scoring implementation for propositional logic answers"""
-        if not answer:
+        if not isinstance(answer, str):
             return 0.0
 
         try:
@@ -305,7 +316,7 @@ class PropositionalLogicDataset(ProceduralDataset):
             valid_vars = set(entry["metadata"]["variables"])
             answer_vars = re.findall(r"([A-Z])", cleaned_answer)
             if any(var not in valid_vars for var in answer_vars):
-                return 0.01
+                return 0.0
 
             premises = [Expression.from_string(p) for p in entry["metadata"]["premises"]]
             answer_expr = Expression.from_string(cleaned_answer)
@@ -317,7 +328,7 @@ class PropositionalLogicDataset(ProceduralDataset):
                     return 1.0
             return 0.05
         except (ValueError, KeyError, AttributeError):
-            return 0.01
+            return 0.0
 
     def _is_trivial(self, expr: Expression) -> bool:
         """Check for trivial tautologies like P ∨ ¬P"""
@@ -330,4 +341,34 @@ class PropositionalLogicDataset(ProceduralDataset):
         return True
 
 
-register_dataset("propositional_logic", PropositionalLogicDataset, PropositionalLogicConfig)
+class PropositionalLogicCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(PropositionalLogicCurriculum.__name__, PropositionalLogicConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="vars",
+                levels=[2, 4, 6, 8, 10],
+                description="Number of variables in the logical expressions",
+                lower_field_name="min_vars",
+                upper_field_name="max_vars",
+            ),
+            RangeAttributeDefinition(
+                name="statements",
+                levels=[2, 4, 6, 8, 10],
+                description="Number of premises in the logical expressions",
+                lower_field_name="min_statements",
+                upper_field_name="max_statements",
+            ),
+            RangeAttributeDefinition(
+                name="complexity",
+                levels=[1, 2, 3, 4, 5],
+                description="Complexity of the logical expressions",
+                lower_field_name="min_complexity",
+                upper_field_name="max_complexity",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, PropositionalLogicDataset, PropositionalLogicConfig, PropositionalLogicCurriculum)

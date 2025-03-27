@@ -3,7 +3,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "graph_color"
 
 
 def generate_random_graph(rng, num_vertices, edge_probability=0.3):
@@ -154,9 +157,10 @@ def greedy_graph_coloring(puzzle):
 class GraphColorConfig:
     """Configuration for GraphColor puzzle generation"""
 
-    num_colors: int = 4
-    num_vertices: int = 10
-    edge_probability: float = 0.4
+    num_colors: int = 3
+    min_num_vertices: int = 10
+    max_num_vertices: int = 10
+    edge_probability: float = 0.1
     seed: Optional[int] = None
     size: int = 500
 
@@ -184,14 +188,18 @@ class GraphColorDataset(ProceduralDataset):
 
         puzzle = None
         solution = None
+        num_vertices = rng.randint(self.config.min_num_vertices, self.config.max_num_vertices)
+        num_colors = self.config.num_colors
         while solution is None:
             puzzle = generate_graph_coloring_puzzle(
                 rng=rng,
-                num_vertices=self.config.num_vertices,
+                num_vertices=num_vertices,
                 edge_probability=self.config.edge_probability,
-                num_colors=self.config.num_colors,
+                num_colors=num_colors,
             )
             solution = greedy_graph_coloring(puzzle)
+            if not solution:
+                num_vertices = rng.randint(self.config.min_num_vertices, self.config.max_num_vertices)
 
         edges = str(puzzle["edges"])
         question = f"""Please provide a coloring for this graph such that every vertex is not connected to a vertex of the same color. The graph has these properties:
@@ -200,13 +208,23 @@ Vertices: {puzzle["vertices"]}
 Edges: {edges}
 Possible colors: {puzzle["color_options"]}
 
-Return your solution as a JSON map of vertices to colors. (For example: {{0: 1, 1: 2, 2: 3}})
+Return your solution as a JSON map of vertices to colors. (For example: {{"0": 1, "1": 2, "2": 3}}.)
 """
 
         return {
             "question": question,
             "answer": None,
-            "metadata": {"possible_answer": solution, "puzzle": puzzle},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "possible_answer": solution,
+                "puzzle": puzzle,
+                "num_vertices": num_vertices,
+                "difficulty": {
+                    "num_vertices": (self.config.min_num_vertices, self.config.max_num_vertices),
+                    "num_colors": num_colors,
+                },
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
@@ -225,12 +243,37 @@ Return your solution as a JSON map of vertices to colors. (For example: {{0: 1, 
         if answer == None:
             return 0.0
 
-        danswer = json.loads(answer)
-        solved, failure = verify_graph_coloring_solution(entry["metadata"]["puzzle"], danswer)
-        if not solved:
-            return 0.01
-        else:
-            return 1.0  # Yay
+        try:
+            danswer = json.loads(answer)
+            solved, failure = verify_graph_coloring_solution(entry["metadata"]["puzzle"], danswer)
+            if solved:
+                return 1.0  # Yay
+            else:
+                return 0.01  # json parsable
+        except Exception:
+            pass
+        return 0.0
 
 
-register_dataset("graph_color", GraphColorDataset, GraphColorConfig)
+class GraphColorCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(GraphColorCurriculum.__name__, GraphColorConfig)
+
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="num_vertices",
+                levels=[10, 20, 25, 50],
+                description="Number of vertices in the graph",
+                lower_field_name="min_num_vertices",
+                upper_field_name="max_num_vertices",
+            ),
+            ScalarAttributeDefinition(
+                name="num_colors",
+                field_name="num_colors",
+                levels=[5, 4, 3],
+                description="Number of colors in the graph",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, GraphColorDataset, GraphColorConfig, GraphColorCurriculum)

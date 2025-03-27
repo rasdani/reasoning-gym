@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, ScalarAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
+
+DATASET_NAME = "self_reference"
 
 
 def is_prime(n):
@@ -329,9 +332,10 @@ class SelfReferenceDataset(ProceduralDataset):
                 - metadata: dict with generation parameters
         """
         rng = Random(self.seed + idx)
+        difficulty = self.config.difficulty
 
         # Generate puzzle
-        puzzle = generate_dynamic_puzzle(self.config.difficulty, rng)
+        puzzle = generate_dynamic_puzzle(difficulty, rng)
         puzz_s = (
             "Given the truthfulness of these statements, please tell me the number of possible solutions: \n"
             + print_puzzle_dynamic(puzzle)
@@ -339,14 +343,16 @@ class SelfReferenceDataset(ProceduralDataset):
 
         # Solve puzzle
         solutions = solve_puzzle_dynamic(puzzle)
-        for idx, sol in enumerate(solutions, start=1):
-            sol_str = ["True" if s else "False" for s in sol]
-        answer = len(solutions)
+        answer = str(len(solutions))
 
         return {
             "question": puzz_s,
             "answer": answer,
-            "metadata": {},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "difficulty": {"difficulty": difficulty},
+            },
         }
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
@@ -362,12 +368,23 @@ class SelfReferenceDataset(ProceduralDataset):
             float: The computed score between 0.0 and 1.0.
         """
 
-        if answer == None:
-            return 0.0
-        if str(answer) != str(entry["answer"]):
-            return 0.1
-        else:
-            return 1.0  # Yay
+        if isinstance(answer, str):
+            if answer == str(entry["answer"]):
+                return 1.0  # Yay
+        return 0.0
 
 
-register_dataset("self_reference", SelfReferenceDataset, SelfReferenceConfig)
+class SelfReferenceCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(SelfReferenceCurriculum.__name__, SelfReferenceConfig)
+        self._define_attributes(
+            ScalarAttributeDefinition(
+                name="difficulty",
+                field_name="difficulty",
+                levels=list(range(1, 11)),
+                description="The difficulty of the puzzle",
+            )
+        )
+
+
+register_dataset(DATASET_NAME, SelfReferenceDataset, SelfReferenceConfig, SelfReferenceCurriculum)

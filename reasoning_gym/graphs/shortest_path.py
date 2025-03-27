@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from random import Random
 from typing import Any, Optional
 
+from ..coaching import BaseCurriculum, RangeAttributeDefinition
 from ..factory import ProceduralDataset, register_dataset
 
 QUESTION_TEMPLATE = """Your task is to find the shortest path from the start to the destination point in a grid.
@@ -16,27 +17,18 @@ The grid is represented as a matrix with the following types of cells:
 - X: a blocked cell
 
 Therefore, you need to find the shortest path from * to #, moving only through open cells.
+
+You may only move in four directions: up, down, left, and right.
+
 If there is no path from * to #, simply write "infeasible" (without quotes).
 
-Example 1:
-- Input: Find the length of the shortest path from * to # in the following grid:
-    X X X X X
-    X * O O X
-    X O X O X
-    X X X O #
-- Output: right right down down right
-
-Example 2:
-- Input: Find the length of the shortest path from * to # in the following grid:
-    X X X X X
-    X * O O X
-    X O X O X
-    X X X X #
-- Output: infeasible
+Your output should be a sequence of directions that leads from * to #, e.g. right right down down up left
 
 Now, find the length of the shortest path from * to # in the following grid:
 {grid}
 """
+
+DATASET_NAME = "shortest_path"
 
 
 @dataclass
@@ -67,12 +59,8 @@ class ShortestPathDataset(ProceduralDataset):
     def __init__(self, config: ShortestPathConfig):
         super().__init__(config=config, seed=config.seed, size=config.size)
 
-    def _get_grid(self, rng: Random) -> list[list[str]]:
+    def _get_grid(self, rng: Random, rows: int, cols: int) -> list[list[str]]:
         """Generate a random grid with open and blocked cells"""
-
-        rows, cols = rng.randint(self.config.min_rows, self.config.max_rows), rng.randint(
-            self.config.min_cols, self.config.max_cols
-        )
         grid = [["X" if rng.random() < self.config.p_blocked else "O" for _ in range(cols)] for _ in range(rows)]
 
         start_r, start_c = rng.randint(0, rows - 1), rng.randint(0, cols - 1)
@@ -136,8 +124,8 @@ class ShortestPathDataset(ProceduralDataset):
 
     def score_answer(self, answer: Optional[str], entry: dict[str, Any]) -> float:
         """Overwrite this method in derived classes if a single oracle answer is not available."""
-        oracle_answer = entry["answer"].strip()
-        if answer is not None and len(answer) > 0:
+        if isinstance(answer, str) and len(answer) > 0:
+            oracle_answer = entry["answer"].strip()
             answer = answer.strip()
 
             # Exact answer
@@ -156,15 +144,15 @@ class ShortestPathDataset(ProceduralDataset):
             elif self._is_valid_path(matrix, answer):
                 return 0.5
 
-            return 0.01
-
         return 0.0
 
     def __getitem__(self, idx: int) -> dict:
         """Generate a single Shortest Path question"""
         rng = Random(self.seed + idx)
 
-        matrix = self._get_grid(rng)
+        rows = rng.randint(self.config.min_rows, self.config.max_rows)
+        cols = rng.randint(self.config.min_cols, self.config.max_cols)
+        matrix = self._get_grid(rng, rows, cols)
         matrix_str = self._matrix_to_str(matrix)
         answer = self._get_answer(matrix)
         answer_str = " ".join(answer) if answer else "infeasible"
@@ -172,8 +160,40 @@ class ShortestPathDataset(ProceduralDataset):
         return {
             "question": QUESTION_TEMPLATE.format(grid=matrix_str),
             "answer": answer_str,
-            "metadata": {"matrix": matrix, "solution": answer},
+            "metadata": {
+                "source_dataset": DATASET_NAME,
+                "source_index": idx,
+                "matrix": matrix,
+                "solution": answer,
+                "difficulty": {
+                    "rows": (self.config.min_rows, self.config.max_rows),
+                    "cols": (self.config.min_cols, self.config.max_cols),
+                },
+            },
         }
 
 
-register_dataset("shortest_path", ShortestPathDataset, ShortestPathConfig)
+class ShortestPathCurriculum(BaseCurriculum):
+    def __init__(self):
+        super().__init__(ShortestPathCurriculum.__name__, ShortestPathConfig)
+
+        # Define attributes
+        self._define_attributes(
+            RangeAttributeDefinition(
+                name="rows",
+                levels=[10, 25, 50, 100],
+                description="Number of rows in the grid",
+                lower_field_name="min_rows",
+                upper_field_name="max_rows",
+            ),
+            RangeAttributeDefinition(
+                name="cols",
+                levels=[10, 25, 50, 100],
+                description="Number of columns in the grid",
+                lower_field_name="min_cols",
+                upper_field_name="max_cols",
+            ),
+        )
+
+
+register_dataset(DATASET_NAME, ShortestPathDataset, ShortestPathConfig, ShortestPathCurriculum)
