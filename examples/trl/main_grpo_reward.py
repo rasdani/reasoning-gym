@@ -7,6 +7,7 @@ import sys
 from dataclasses import dataclass
 from typing import Optional
 
+import wandb
 import datasets
 import torch
 import transformers
@@ -71,11 +72,15 @@ class GRPOTrainerCustom(GRPOTrainer):
     def _format_reward(self, completions, **kwargs):
         regex = r"^<think>([^<]*(?:<(?!/?think>)[^<]*)*)<\/think>\n<answer>([\s\S]*?)<\/answer>$"
         matches = [re.match(regex, completion, flags=re.DOTALL) for completion in completions]
-        return [1.0 if match else 0.0 for match in matches]
+        ret = [1.0 if match else 0.0 for match in matches]
+        wandb.log({"avg_format_reward": sum(ret)/len(ret)})
+        return ret
 
     def _accuracy_reward(self, completions, metadata, **kwargs):
         answers = [extract_answer(completion) for completion in completions]
-        return [self.train_dataset.data.score_answer(answer, entry=obj) for (answer, obj) in zip(answers, metadata)]
+        ret = [self.train_dataset.data.score_answer(answer, entry=obj) for (answer, obj) in zip(answers, metadata)]
+        wandb.log({"avg_accuracy_reward": sum(ret)/len(ret)})
+        return ret
 
 
 def main(script_args, training_args, model_args):

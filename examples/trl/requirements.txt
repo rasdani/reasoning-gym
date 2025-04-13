@@ -5,4 +5,4 @@ transformers
 trl
 wandb
 huggingface_hub
-flash-attn --no-build-isolation
+# flash-attn --no-build-isolation

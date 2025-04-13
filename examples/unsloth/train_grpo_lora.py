@@ -88,7 +88,22 @@ class GRPOTrainerCustom(GRPOTrainer):
     def _format_reward(self, completions, **kwargs):
         regex = r"^<think>([^<]*(?:<(?!/?think>)[^<]*)*)<\/think>\n<answer>([\s\S]*?)<\/answer>$"
         matches = [re.match(regex, completion, flags=re.DOTALL) for completion in completions]
-        return [1.0 if match else 0.0 for match in matches]
+        rewards = []
+        for match in matches:
+            reward = 0.0
+            if match:
+                if match.group(1):
+                    reward += 0.5
+                if match.group(2):
+                    if "answer" in match.group(2):
+                        reward += 0.00
+                    else:
+                        reward += 0.5
+            else:
+                pass
+            rewards.append(reward)
+        return rewards
+        # return [1.0 if match else 0.0 for match in matches]
 
     def _accuracy_reward(self, completions, metadata, **kwargs):
         answers = [utils.extract_answer(completion) for completion in completions]
@@ -180,7 +195,7 @@ def main(args):
         report_to = "wandb",
     )
 
-    train(model, tokenizer, dataset, training_args)
+    # train(model, tokenizer, dataset, training_args)
 
     model = FastLanguageModel.for_inference(model)
 
@@ -195,8 +210,8 @@ def main(args):
     accuracy = evaluate(model, tokenizer, eval_dataset, max_new_tokens=training_args.max_completion_length)
     logging.info(f"Evaluation accuracy: {accuracy * 100}%")
 
-    model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit",)
-    model.push_to_hub_merged("rasdani/Qwen2.5-1.5B-Instruct-GRPO-rg", tokenizer, save_method = "merged_16bit", token = os.environ["HF_TOKEN"])
+    # model.save_pretrained_merged("model", tokenizer, save_method = "merged_16bit",)
+    # model.push_to_hub_merged("rasdani/Qwen2.5-1.5B-Instruct-GRPO-rg", tokenizer, save_method = "merged_16bit", token = os.environ["HF_TOKEN"])
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
