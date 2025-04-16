@@ -114,6 +114,6 @@ def get_score_answer_fn(name: str) -> Callable[[], float]:
     if name not in DATASETS:
         raise ValueError(f"Dataset '{name}' not registered")
 
-    dataset_cls, _ = DATASETS[name]
+    dataset_cls, config_cls = DATASETS[name]
 
-    return dataset_cls.score_answer
+    return dataset_cls(config=config_cls()).score_answer
