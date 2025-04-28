@@ -4,7 +4,7 @@
 reasoning_gym:
   # Total size of the dataset to generate
   dataset_size: 20000
-  
+
   # Datasets to include in the composite dataset
   datasets:
     # Example algorithmic tasks
@@ -15,7 +15,7 @@ reasoning_gym:
       config:
         min_word_len: 3
         max_word_len: 10
-    
+
     letter_jumble:
       weight: 0.34
       config:
@@ -23,7 +23,7 @@ reasoning_gym:
         max_word_len: 50  # Maximum word length
         min_words: 3  # Minimum words per task
         max_words: 40
-    
+
     word_sorting:
       weight: 0.33
       config:
@@ -36,9 +36,9 @@ reasoning_gym:
 huggingface:
   # Repository ID (required when using this config file directly)
   repo_id: "username/reasoning-gym-dataset"
-  
+
   # Whether to make the repository private
   private: false
-  
+
   # Dataset split name
   split: "train"
